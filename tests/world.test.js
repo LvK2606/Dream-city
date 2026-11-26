@@ -66,3 +66,6 @@ test('interaction report cannot pass with a failed assertion, exception or empty
  assert.equal(interactionResult('mobile',[{ok:true}],{},'timeout').passed,false);
  assert.equal(interactionResult('mobile',[],{}).passed,false);
 });
+
+import {atlasUV,makeBakedCards,TREE_ANGLES,prototypeOptions} from '../src/tree-prototypes.js';
+test('baked cards use separate atlas cells with gutters and six triangles',()=>{const g=makeBakedCards(2,5);assert.equal(g.index.count/3,6);for(let i=0;i<3;i++){const a=atlasUV(0,0,i),b=atlasUV(1,1,i);assert.ok(a[0]>i/3&&b[0]<(i+1)/3&&a[1]>0&&b[1]<1)}assert.equal(TREE_ANGLES.length,3);g.dispose()});

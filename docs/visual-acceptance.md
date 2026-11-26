@@ -30,3 +30,6 @@ Preserve original nine gates. Require nine additional HUD-free captures and two 
 
 ## v0.4.9.1 corrective QA
 Preserve the single workflow, 9 render budgets, 20 captures and 2 interaction reports. Pause/resume requires two fresh completed frames after each action; verify real motion and negative cases. Interaction reports derive status from recorded assertions, not a constant. Verify short landscape panel collapsed, open within screen bounds, scroll-accessible controls and close. No acceptance until exact-SHA CI and actual screenshot inspection.
+
+## v0.4.10
+Require 3 actual EZ-Tree prototype pairs and 3 orthographic alpha-bearing source renders per species, 6 triangles per far card representation. Preserve all previous render budgets and 20 captures, interaction checks, audit. Verify images for canopy silhouette and LOD discontinuity; full scan, KTX2 compressed input and physical hardware not certified.

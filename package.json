@@ -1,17 +1,18 @@
 {
   "name": "dream-city",
-  "version": "0.4.9-fix.1",
+  "version": "0.4.10",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/fetch-assets.mjs && node scripts/fetch-model.mjs && node scripts/fetch-vegetation.mjs && VITE_BUILD_SHA=${VERCEL_GIT_COMMIT_SHA:-${GITHUB_SHA:-local}} vite build",
+    "build": "node scripts/fetch-assets.mjs && node scripts/fetch-model.mjs && node scripts/fetch-vegetation.mjs && node scripts/copy-basis.mjs && VITE_BUILD_SHA=${VERCEL_GIT_COMMIT_SHA:-${GITHUB_SHA:-local}} vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/world.test.js"
   },
   "dependencies": {
     "three": "0.180.0",
-    "meshoptimizer": "0.24.0"
+    "meshoptimizer": "0.24.0",
+    "@dgreenheck/ez-tree": "1.1.0"
   },
   "devDependencies": {
     "vite": "6.4.6"

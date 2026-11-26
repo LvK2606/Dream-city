@@ -38,3 +38,6 @@ Three.js r180 WebGLShadowMap.js and WebGLRenderer.js reviewed. Original depth-on
 
 ## v0.4.5–v0.4.8
 Original procedural building massing, streets/traffic lanes, park/outcrop layout and night sky; reuse existing Three.js r180 MIT and Poly Haven CC0 assets, Meshoptimizer MIT. No new proprietary assets or source copying.
+
+## v0.4.10 OSS asset adapter
+EZ-Tree 1.1.0 (MIT, Daniel Greenheck) pinned npm, original adapter; photo leaves remain Poly Haven CC0. Three.js r180 MIT KTX2Loader, Meshopt decoder and bundled Basis transcoder (Apache-2.0). Review matrix in docs/AAA_ASSET_PIPELINE.md. No upstream source copied outside library dependency. Decoder readiness is not compressed-input validation.
