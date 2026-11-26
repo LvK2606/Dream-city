@@ -12,3 +12,5 @@ V0.3: photo-sourced ground maps and HDR environment when asset acquisition succe
 V0.3 asset fix: accepts API channel names such as Diffuse and Rough, JPG or PNG, and official CDN fallback. CI and Vercel builds require all four asset groups. Missing assets cannot pass the release build.
 
 V0.4.1: consolidate modular facades to a single quad per window; original procedural room shader with night emission and far simplification, brighter tower wall. QA now captures production using build SHA from Vercel/GitHub environment; if SHA, assets or browser assertions fail, production QA fails. Physical GPU benchmarks and visual approval remain separate.
+
+V0.4.2 experiment: near facade uses one room quad per opening; far facade uses four quads per building volume with procedural window grid; stable seeded lights and chunk-distance hysteresis. QA asserts fewer than 65% active window quads from aerial and near windows at street level. Visual parity and measured pipeline performance require CI evidence. Main production remains V0.4.1 until its exact-SHA QA completes.

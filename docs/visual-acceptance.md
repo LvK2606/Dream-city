@@ -1,2 +1,5 @@
 # V0.4 acceptance (f09ad4894c65fc750878b19f5fd55b00c7a28eb4)
 CI 45858511527 PASS, 8 unit tests, all 6 photo groups loaded. 9 screenshots inspected against V0.3. Visible improvement: more distinct frames and night variation. Regressions: dark daytime facades, still toy-like repetitive shapes. Logs: high street 245 calls/797473 triangles; medium street 240/797490; mobile night 177/305594, software fps rounded 0/0/2. No GPU inference; no production browser evidence for V0.4. Decision: HOLD V0.5, refine V0.4.1. One-quad-per-window budget, interior shader, brighter walls and exact-build production QA implemented; visual and runtime evidence pending. No AAA claim.
+
+## V0.4.1 and V0.4.2 experiment
+V0.4.1 local Chromium step PASS, exact-SHA production step in progress at time of branch creation. No visual acceptance without screenshots. Preserve main during active run. V0.4.2 tests original facade-specific LOD separately; compare same views and quality, record active quads and actual total calls/triangles before considering merge. Real asset library remains outstanding.

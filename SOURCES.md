@@ -17,3 +17,6 @@ Asset schema compatibility: normalize channel keys and select JPG/PNG from metad
 
 ## V0.4.1
 Joost van Dongen's 2008 interior mapping paper and codedgar/three-fenestra (MIT, README and license reviewed) informed a new original, texture-free room-box shader. No external shader or assets copied. One quad per opening, procedural frame, room surfaces, simplified far-distance shading. Not a full 3D room or physically accurate glass.
+
+## V0.4.2 (experimental branch)
+Three.js r180 LOD.js source reviewed: distance hysteresis. meshoptimizer README reviewed: simplification error and GPU locality; not installed. Original facade-specific LOD uses one grid quad per wall, consistent seeded night lighting, spatial region hysteresis and no added texture. Poly Haven Modular Urban Apartments Facade (CC0) identified as a future source; not downloaded or integrated in this branch. Raw kit must be split and optimized before repeated city instancing.
