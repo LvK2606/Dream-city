@@ -27,7 +27,7 @@ export function pixelLOD(p,previous,quality){
 export function forestPosition(x,z){
  const field=Math.sin(x*.038+z*.019)*Math.cos(z*.032-x*.013);
  const angle=Math.sin(x*.071-z*.047)*Math.PI;
- const nx=x+Math.cos(angle)*(1-field)*6,nz=z+Math.sin(angle)*(1-field)*6;
+ const nx=x+Math.cos(angle)*(1-field)*12,nz=z+Math.sin(angle)*(1-field)*12;
  if(Math.abs(nx)<24||(Math.abs(nx)<160&&Math.abs(nz)<123))return [x,z];
  return [Math.max(-237.5,Math.min(237.5,nx)),Math.max(-237.5,Math.min(237.5,nz))];
 }

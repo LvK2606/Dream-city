@@ -21,7 +21,7 @@ export function buildStreetDetails({box,plane}){
  }
  // Six compact shelter/bench assemblies, on the sidewalk verge, not on road lanes.
  for(const [x,z] of [[-56,-40],[-120,24],[-24,24],[56,-40],[120,24],[24,24]]){
-  const px=x+(x<0?4.55:-4.55);
+  const px=x+(Math.abs(x)===24?(x<0?-4.55:4.55):(x<0?4.55:-4.55));
   for(const q of [-1,1])box('metal',px,.10,z+q*1.35,.08,2.45,.08);
   box('trim',px,2.55,z,1.3,.13,3.0);
   box('metal',px,.12,z,.55,.35,1.8);box('roof',px,.47,z,.58,.12,1.9);
