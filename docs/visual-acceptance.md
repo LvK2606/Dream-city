@@ -6,3 +6,6 @@ V0.4.1 local Chromium step PASS, exact-SHA production step in progress at time o
 
 ## V0.4.2 acceptance
 CI 45860456554 PASS (10 tests; 9 screenshots inspected; production step skipped on branch). Compare V0.4.1 local captures: aerial medium 202->222 calls, 380114->353790 triangles; 14074->912 active window quads; street 188->100 calls, 703814->340692 triangles (reflection cadence makes full-frame counters nonidentical); low mobile aerial 137->151 calls and 233374->208426 tris. Night aerial calls increased 415->455. Visible quality essentially unchanged; city still block-like, white sky, low-poly trees and traffic intersection. V0.4.1 exact-SHA production CI passed and screenshots inspected. HOLD V0.5. Real glTF pilot + photo sky added on branch in V0.4.3; no final acceptance until runtime and images. GPU benchmark unavailable.
+
+## V0.4.4 vegetation reconstruction (candidate)
+Replace legacy solid ico canopies with original textured leaf cards, tapered branches, two species profiles and three camera-distance LODs with hysteresis. CI asserts population accounting, near/far selection, geometry budget and exact build SHA. Original procedural textures are an interim approach, not scanned tree assets. Real CC0 vegetation acquisition and measured GPU/visual acceptance remain required. HOLD V0.5; do not merge until screenshots and deployment are inspected.
