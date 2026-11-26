@@ -1,8 +1,8 @@
 import {mkdir,writeFile} from 'node:fs/promises';import {createHash} from 'node:crypto';
 const id='tree_small_02',dir='public/vegetation-assets';await mkdir(dir,{recursive:true});let manifest;
-function entries(obj,trail=[]){if(!obj||typeof obj!=='object')return [];if(typeof obj.url==='string')return [{...obj,trail:trail.join('/')}];return Object.entries(obj).flatMap(([k,v])=>entries(v,[...trail,k]))}
+function entries(obj,trail=[]){if(!obj||typeof obj!=='object')return [];const own=typeof obj.url==='string'?[{...obj,trail:trail.join('/')}]:[];return own.concat(Object.entries(obj).flatMap(([k,v])=>entries(v,[...trail,k])))}
 async function getMap(meta,channel){
- const options=entries(meta).filter(e=>{const p=(e.trail+' '+e.url).toLowerCase();return p.includes(channel)&&/(1k|1024)/.test(p)&&/\.(png|jpg|jpeg)(\?|$)/i.test(e.url)});
+ const options=entries(meta).filter(e=>{const p=(e.trail+' '+e.url).toLowerCase().replace(/[- ]/g,'_');return p.includes(channel)&&/(1k|1024)/.test(p)&&/\.(png|jpg|jpeg)(\?|$)/i.test(e.url)});
  options.sort((a,b)=>Number(!a.url.endsWith('.png'))-Number(!b.url.endsWith('.png')));
  if(!options.length)throw Error('no 1k photo map '+channel);
  const entry=options[0],u=new URL(entry.url);if(u.protocol!=='https:'||u.hostname!=='dl.polyhaven.org')throw Error('unexpected asset host');
