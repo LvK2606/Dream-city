@@ -23,7 +23,7 @@ export function createNightSky(){
   vec3 color=mix(vec3(.028,.048,.078),vec3(.0045,.010,.025),smoothstep(0.0,.8,h));
   vec2 uv=vec2(atan(d.z,d.x)/6.2831853+.5,asin(clamp(d.y,-1.,1.))/3.14159265+.5);
   vec2 cell=floor(uv*vec2(360.,180.)),f=fract(uv*vec2(360.,180.))-.5;
-  float star=step(.993,hash(cell))*smoothstep(.12,.015,length(f))*smoothstep(.06,.22,h);
+  float star=step(.993,hash(cell))*(1.0-smoothstep(.015,.12,length(f)))*smoothstep(.06,.22,h);
   color+=star*vec3(.40,.47,.62);
   gl_FragColor=vec4(color,1.);
   #include <colorspace_fragment>
