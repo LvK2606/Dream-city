@@ -48,3 +48,21 @@ test('lighting profiles and pixel budgets remain deterministic, night sky is iso
 
 import {staticBatchKey,batchInventory} from '../src/static-batching.js';
 test('static coalescing preserves explicit facade regions and groups lightweight details only',()=>{const a={min:{x:10,z:10},max:{x:11,z:11}},b={min:{x:110,z:10},max:{x:111,z:11}};assert.equal(staticBatchKey('paint',a),staticBatchKey('paint',b));assert.notEqual(staticBatchKey('brickWall',a),staticBatchKey('brickWall',b));assert.equal(staticBatchKey('windowModule',a,'region-X'),'windowModule|region-X');const g=new BoxGeometry(1,1,1),s=batchInventory(new Map([['paint|0,0',[g,g]]]));assert.equal(s.triangles,24);assert.equal(s.byMaterial.paint.batches,1);g.dispose()});
+
+import {trafficTransition,interactionResult} from './interaction-checks.mjs';
+test('traffic QA uses fresh frames and distinguishes freeze, resume and wraparound',()=>{
+ const snap=(frames,paused,trafficSample)=>({frames,motion:{paused,trafficSample}});
+ assert.equal(trafficTransition(snap(3,true,.5),snap(5,true,.5),true).ok,true);
+ assert.equal(trafficTransition(snap(3,true,.5),snap(5,true,.51),true).ok,false);
+ assert.equal(trafficTransition(snap(6,false,.5),snap(6,false,.51),false).ok,false);
+ assert.equal(trafficTransition(snap(6,false,.5),snap(8,false,.5),false).ok,false);
+ assert.equal(trafficTransition(snap(6,false,.5),snap(8,true,.51),false).ok,false);
+ assert.equal(trafficTransition(snap(6,false,.99),snap(8,false,.01),false).ok,true);
+ assert.equal(trafficTransition(snap(6,false,NaN),snap(8,false,.01),false).ok,false);
+});
+test('interaction report cannot pass with a failed assertion, exception or empty checks',()=>{
+ assert.equal(interactionResult('mobile',[{ok:true}],{}).passed,true);
+ assert.equal(interactionResult('mobile',[{ok:true},{ok:false}],{}).passed,false);
+ assert.equal(interactionResult('mobile',[{ok:true}],{},'timeout').passed,false);
+ assert.equal(interactionResult('mobile',[],{}).passed,false);
+});

@@ -27,3 +27,6 @@ See VISUAL_ROADMAP_V048.md. Each stage has a separate source commit; one cumulat
 
 ## v0.4.9 Backlog Review
 Preserve original nine gates. Require nine additional HUD-free captures and two interaction reports (pause/resume, preset transition, light switch, viewport resize). Record static batching inventory and compare peak draw/triangle costs with v0.4.8. No production or hardware acceptance inferred.
+
+## v0.4.9.1 corrective QA
+Preserve the single workflow, 9 render budgets, 20 captures and 2 interaction reports. Pause/resume requires two fresh completed frames after each action; verify real motion and negative cases. Interaction reports derive status from recorded assertions, not a constant. Verify short landscape panel collapsed, open within screen bounds, scroll-accessible controls and close. No acceptance until exact-SHA CI and actual screenshot inspection.

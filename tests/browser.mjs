@@ -1,6 +1,7 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
+import {trafficTransition,interactionResult} from './interaction-checks.mjs';
 const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
 const out=process.env.QA_DIR||'qa',reports=[],failures=[],interactions=[];mkdirSync(out,{recursive:true});
 const cases=[['aerial','day'],['street','day'],['river','sunset'],['aerial','night']];
@@ -8,7 +9,7 @@ const check=(ok,msg)=>{if(!ok)failures.push(msg)};
 function validate(s,name,cam,light,high){
  const k=name+'/'+cam+'/'+light+(high?'/high':''),v=s.vegetation,p=s.passes.window;
  const ck=(ok,msg)=>check(ok,k+' '+msg);
- ck(s.version==='0.4.9','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
+ ck(s.version==='0.4.9.1','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
  ck(s.architecture.variants>=16&&s.architecture.volumes>s.buildings&&s.architecture.buildings===s.buildings,'architecture massing');
  ck(s.streets.markings>100&&s.streets.furniture===6&&s.streets.signals>20&&s.streets.lanes>30&&s.cars===100,'street detail and traffic');
  ck(s.landscape.parks===4&&s.landscape.paths===12&&s.landscape.rocks>=40&&s.landscape.triangles<=2240&&s.landscape.drawUpperBound===1,'landscape kit');
@@ -41,24 +42,50 @@ function validate(s,name,cam,light,high){
  }
 }
 async function interactionQA(page,name,viewport,out,check){
- const read=()=>page.evaluate(()=>window.__DREAM_QA__.report()),waitFrame=async(n)=>page.waitForFunction(n=>window.__DREAM_QA__.report().frames>n,n,{timeout:120000});
+ const checks=[],evidence={};
+ const verify=(ok,label)=>{const pass=!!ok;checks.push({label,ok:pass});check(pass,name+' '+label)};
+ const read=()=>page.evaluate(()=>window.__DREAM_QA__.report());
+ const waitFrames=(n,count=2)=>page.waitForFunction(({n,count})=>window.__DREAM_QA__.report().frames>=n+count,{n,count},{timeout:120000});
  const toggle=page.locator('#panel-toggle');
- if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
- check(await page.locator('#panel').isVisible(),name+' panel opens');
- await page.locator('#hide').click();check(!(await page.locator('#panel').isVisible()),name+' clean mode hides panel');
- await page.keyboard.press('Escape');check(await page.locator('#panel').isVisible(),name+' Escape restores HUD');
- await page.locator('#pause').click();const paused=await read();await waitFrame(paused.frames);const still=await read();
- check(still.motion.paused&&paused.motion.trafficSample===still.motion.trafficSample,name+' pause holds traffic');
- await page.locator('#pause').click();await waitFrame(still.frames);const moving=await read();check(!moving.motion.paused&&moving.motion.trafficSample!==still.motion.trafficSample,name+' traffic resumes');
- await page.locator('[data-camera="street"]').click();const street=await read();
- await page.locator('[data-camera="aerial"]').click();
- await page.waitForFunction(()=>{const r=window.__DREAM_QA__.report();return !r.motion.tween&&Math.abs(r.motion.position[0]-185)<1&&Math.abs(r.motion.position[1]-145)<1},{},{timeout:120000});
- const aerial=await read();check(Math.abs(street.motion.position[0]-aerial.motion.position[0])>20,name+' camera transition');
- await page.locator('[data-light="night"]').click();await waitFrame(aerial.frames);const night=await read();check(night.light==='night'&&night.rendering.nightSky,name+' lighting switch');
- await page.setViewportSize({width:viewport.height,height:viewport.width});await page.waitForFunction(([w,h])=>{const r=window.__DREAM_QA__.report();return r.motion.viewport[0]===w&&r.motion.viewport[1]===h},[viewport.height,viewport.width],{timeout:120000});
- const resized=await read();await waitFrame(resized.frames);await page.screenshot({path:out+'/'+name+'-interaction-resize.png'});
- return {name,passed:true,street:street.motion,aerial:aerial.motion,night:night.rendering,resized:resized.motion};
+ try{
+  if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
+  verify(await page.locator('#panel').isVisible(),'panel opens');
+  await page.locator('#hide').click();verify(!(await page.locator('#panel').isVisible()),'clean mode hides panel');
+  await page.keyboard.press('Escape');verify(await page.locator('#panel').isVisible(),'Escape restores HUD');
+  await page.locator('#pause').click();const paused=await read();await waitFrames(paused.frames);const still=await read();
+  evidence.pause=trafficTransition(paused,still,true);verify(evidence.pause.ok,'pause holds traffic across fresh frames');
+  await page.locator('#pause').click();const resumed=await read();
+  await waitFrames(resumed.frames);const moving=await read();
+  evidence.resume=trafficTransition(resumed,moving,false);
+  verify(evidence.resume.ok,'traffic resumes across fresh frames');
+  await page.locator('[data-camera="street"]').click();const street=await read();evidence.street=street.motion;
+  await page.locator('[data-camera="aerial"]').click();
+  await page.waitForFunction(()=>{const r=window.__DREAM_QA__.report();return !r.motion.tween&&Math.abs(r.motion.position[0]-185)<1&&Math.abs(r.motion.position[1]-145)<1},{},{timeout:120000});
+  const aerial=await read();evidence.aerial=aerial.motion;verify(Math.abs(street.motion.position[0]-aerial.motion.position[0])>20,'camera transition');
+  await page.locator('[data-light="night"]').click();const switched=await read();await waitFrames(switched.frames,1);const night=await read();evidence.night=night.rendering;
+  verify(night.light==='night'&&night.rendering.nightSky,'lighting switch');
+  await page.setViewportSize({width:viewport.height,height:viewport.width});
+  await page.waitForFunction(([w,h])=>{const r=window.__DREAM_QA__.report();return r.motion.viewport[0]===w&&r.motion.viewport[1]===h},[viewport.height,viewport.width],{timeout:120000});
+  const resized=await read();await waitFrames(resized.frames,1);evidence.resized=resized.motion;
+  if(name==='mobile'){
+   verify(await toggle.getAttribute('aria-expanded')==='false','landscape defaults collapsed');
+   verify(!(await page.locator('#panel').isVisible()),'landscape unobstructed by default');
+   if(await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
+   const bounds=await page.locator('#panel').evaluate(el=>{const r=el.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,viewport:[innerWidth,innerHeight]}});
+   evidence.landscapePanel=bounds;
+   verify(bounds.width>0&&bounds.height>0&&bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.viewport[0]+1&&bounds.bottom<=bounds.viewport[1]+1&&bounds.width<=bounds.viewport[0]*.48&&bounds.scrollWidth<=bounds.clientWidth+1,'landscape bounded scrollable panel');
+   await page.locator('#pause').scrollIntoViewIfNeeded();verify(await page.locator('#pause').isVisible(),'landscape controls accessible');
+  }
+  await page.screenshot({path:out+'/'+name+'-interaction-resize.png'});
+  if(name==='mobile'){await toggle.click();verify(!(await page.locator('#panel').isVisible()),'landscape panel closes again');}
+  return interactionResult(name,checks,evidence);
+ }catch(e){
+  const error=String(e);verify(false,'interaction exception: '+error);
+  try{await page.screenshot({path:out+'/'+name+'-interaction-error.png'})}catch{}
+  return interactionResult(name,checks,evidence,error);
+ }
 }
+
 try{
  for(const [name,viewport] of [['desktop',{width:1280,height:800}],['mobile',{width:390,height:844}]]){
   const page=await browser.newPage({viewport}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
@@ -81,6 +108,6 @@ try{
   }catch(e){failures.push(name+' initialization: '+String(e))}
   finally{if(errors.length)failures.push(name+' console errors: '+errors.join('; '));await page.close()}
  }
- check(reports.length===9,'expected 9 reports, got '+reports.length);check(interactions.length===2,'expected 2 interaction reports');
+ check(reports.length===9,'expected 9 reports, got '+reports.length);check(interactions.length===2,'expected 2 interaction reports');check(interactions.every(x=>x.passed),'interaction reports must all pass');
 }finally{writeFileSync(out+'/reports.json',JSON.stringify(reports,null,2));writeFileSync(out+'/budget-failures.json',JSON.stringify(failures,null,2));writeFileSync(out+'/interactions.json',JSON.stringify(interactions,null,2));await browser.close()}
 assert.deepEqual(failures,[],'QA failures: '+failures.join('; '));

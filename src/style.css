@@ -12,3 +12,19 @@ body.qa-clean header{display:none!important}
  #panel{max-height:min(46dvh,350px);bottom:calc(52px + env(safe-area-inset-bottom));overflow:auto}
  footer{padding-bottom:calc(6px + env(safe-area-inset-bottom))}
 }
+
+/* Short landscape viewports are compact, even when wider than 650px.
+   Keep scene visible; the control sheet is a narrow scrollable side panel. */
+@media (max-height:500px) and (orientation:landscape){
+ header{padding:6px max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left))}
+ .brand{gap:6px}.brand b{font-size:13px}.brand small{font-size:8px}.mark{width:30px;height:30px;font-size:18px}
+ .top{gap:5px}#panel-toggle,#hide{min-height:36px;padding:6px}
+ #panel{top:52px;bottom:auto;left:max(8px,env(safe-area-inset-left));right:auto;width:min(300px,43vw);max-height:calc(100dvh - 104px - env(safe-area-inset-bottom));padding:10px;display:block;overflow:auto;overflow-x:hidden}
+ #panel h1,#panel p,#panel .eyebrow,#panel .hint{display:none}
+ #panel .stats{margin:0 0 6px;padding:5px 0;gap:10px}
+ #panel .stats strong{font-size:16px}#panel label{margin:8px 0 4px}
+ #panel .buttons{display:flex;gap:4px}#panel .buttons button{min-width:0;padding:6px 3px;font-size:10px;overflow-wrap:anywhere}
+ #panel select,#panel #pause{margin:0 0 4px;min-height:30px;padding:5px}
+ footer{padding:5px max(8px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));gap:8px;font-size:10px}
+ footer #photo{padding:6px}#metrics{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+}
