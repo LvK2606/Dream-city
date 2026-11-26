@@ -1,11 +1,11 @@
 {
   "name": "dream-city",
-  "version": "0.4.4",
+  "version": "0.4.4.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/fetch-assets.mjs && node scripts/fetch-model.mjs && VITE_BUILD_SHA=${VERCEL_GIT_COMMIT_SHA:-${GITHUB_SHA:-local}} vite build",
+    "build": "node scripts/fetch-assets.mjs && node scripts/fetch-model.mjs && node scripts/fetch-vegetation.mjs && VITE_BUILD_SHA=${VERCEL_GIT_COMMIT_SHA:-${GITHUB_SHA:-local}} vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/world.test.js"
   },

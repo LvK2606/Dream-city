@@ -23,3 +23,6 @@ Three.js r180 LOD.js source reviewed: distance hysteresis. meshoptimizer README 
 
 ## V0.4.3 experiment
 Poly Haven Modular Urban Apartments Facade (CC0), official API and individual glTF dependencies; script verifies host and upstream MD5 when available, records SHA256. Runtime selects bounded planar mesh components, never repeats full kit. Pilot instanced accents on 12 buildings, not full model library. Day background uses the previously downloaded photo HDRI; procedural sky retained for sunset/night. Visible credit added. Successful asset import and visual quality require runtime QA.
+
+## V0.4.4.1
+Poly Haven Tree Small 02 (CC0): https://polyhaven.com/a/tree_small_02 — candidate photographic diffuse and opacity leaf maps, fetched from official API, hashed, and composited into original foliage cards. Full source model is about 5M tris and is not ingested. Runtime reports actual load and opacity coverage, not merely asset availability. Procedural fallback remains explicit; CI requires photographic maps. Original projected-size LOD and spatial instancing.

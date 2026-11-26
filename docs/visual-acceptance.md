@@ -9,3 +9,6 @@ CI 45860456554 PASS (10 tests; 9 screenshots inspected; production step skipped 
 
 ## V0.4.4 vegetation reconstruction (candidate)
 Replace legacy solid ico canopies with original textured leaf cards, tapered branches, two species profiles and three camera-distance LODs with hysteresis. CI asserts population accounting, near/far selection, geometry budget and exact build SHA. Original procedural textures are an interim approach, not scanned tree assets. Real CC0 vegetation acquisition and measured GPU/visual acceptance remain required. HOLD V0.5; do not merge until screenshots and deployment are inspected.
+
+## V0.4.4.1 candidate
+Four projected-size tiers, neutral leaf tint, soft diffuse lighting, full silhouette atlas, region-local instancing, frame interval telemetry. Actual photo maps required by CI; fallback is not acceptance. No full scanned mesh or GPU claim. Compare all 9 shots with d03d1940; HOLD V0.4.5 pending evidence and GPU budget.
