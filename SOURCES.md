@@ -20,3 +20,6 @@ Joost van Dongen's 2008 interior mapping paper and codedgar/three-fenestra (MIT,
 
 ## V0.4.2 (experimental branch)
 Three.js r180 LOD.js source reviewed: distance hysteresis. meshoptimizer README reviewed: simplification error and GPU locality; not installed. Original facade-specific LOD uses one grid quad per wall, consistent seeded night lighting, spatial region hysteresis and no added texture. Poly Haven Modular Urban Apartments Facade (CC0) identified as a future source; not downloaded or integrated in this branch. Raw kit must be split and optimized before repeated city instancing.
+
+## V0.4.3 experiment
+Poly Haven Modular Urban Apartments Facade (CC0), official API and individual glTF dependencies; script verifies host and upstream MD5 when available, records SHA256. Runtime selects bounded planar mesh components, never repeats full kit. Pilot instanced accents on 12 buildings, not full model library. Day background uses the previously downloaded photo HDRI; procedural sky retained for sunset/night. Visible credit added. Successful asset import and visual quality require runtime QA.

@@ -3,3 +3,6 @@ CI 45858511527 PASS, 8 unit tests, all 6 photo groups loaded. 9 screenshots insp
 
 ## V0.4.1 and V0.4.2 experiment
 V0.4.1 local Chromium step PASS, exact-SHA production step in progress at time of branch creation. No visual acceptance without screenshots. Preserve main during active run. V0.4.2 tests original facade-specific LOD separately; compare same views and quality, record active quads and actual total calls/triangles before considering merge. Real asset library remains outstanding.
+
+## V0.4.2 acceptance
+CI 45860456554 PASS (10 tests; 9 screenshots inspected; production step skipped on branch). Compare V0.4.1 local captures: aerial medium 202->222 calls, 380114->353790 triangles; 14074->912 active window quads; street 188->100 calls, 703814->340692 triangles (reflection cadence makes full-frame counters nonidentical); low mobile aerial 137->151 calls and 233374->208426 tris. Night aerial calls increased 415->455. Visible quality essentially unchanged; city still block-like, white sky, low-poly trees and traffic intersection. V0.4.1 exact-SHA production CI passed and screenshots inspected. HOLD V0.5. Real glTF pilot + photo sky added on branch in V0.4.3; no final acceptance until runtime and images. GPU benchmark unavailable.
