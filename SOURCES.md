@@ -14,3 +14,6 @@ Asset schema compatibility: normalize channel keys and select JPG/PNG from metad
 
 ## V0.4
 [BuildingGeneratorThreeJS](https://github.com/achrefelouafi/BuildingGeneratorThreeJS), MIT: reviewed LICENSE and docs/BUILD_SYSTEM.md; modular facade and independent window cells inspired original implementation, no kit/source copied. CC0 Poly Haven [Brick Wall 001](https://polyhaven.com/a/brick_wall_001) and [Concrete Tile Facade](https://polyhaven.com/a/concrete_tile_facade) added. Real glTF buildings remain pending.
+
+## V0.4.1
+Joost van Dongen's 2008 interior mapping paper and codedgar/three-fenestra (MIT, README and license reviewed) informed a new original, texture-free room-box shader. No external shader or assets copied. One quad per opening, procedural frame, room surfaces, simplified far-distance shading. Not a full 3D room or physically accurate glass.

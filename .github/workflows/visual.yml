@@ -5,7 +5,7 @@ permissions:
 jobs:
   browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 22
     env:
       REQUIRE_PHOTO_ASSETS: '1'
     steps:
@@ -18,10 +18,16 @@ jobs:
       - run: |
           npm run preview > /tmp/dream-city.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://localhost:4173/ && break; sleep 1; done
-          node tests/browser.mjs
+          EXPECT_BUILD_SHA="$GITHUB_SHA" node tests/browser.mjs
+      - name: Production browser QA (exact build SHA)
+        if: github.ref == 'refs/heads/main'
+        env:
+          BASE_URL: https://dream-city-lime.vercel.app/
+          QA_DIR: qa/production
+        run: EXPECT_BUILD_SHA="$GITHUB_SHA" node tests/browser.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: dream-city-render-captures
-          path: qa/*.png
+          path: qa/
           if-no-files-found: ignore
