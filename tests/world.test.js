@@ -72,3 +72,6 @@ test('baked cards use separate atlas cells with gutters and six triangles',()=>{
 
 test('Node can import asset adapter without browser-only texture loads',async()=>{await assert.rejects(()=>createPrototype(0),/require browser DOM/)});
 test('released EZ-Tree double-leaf topology reduction preserves indexed pairs and UVs',()=>{const g=makeBakedCards(2,5,[0,1,2,3]);const t=thinLeafPairs(g);assert.equal(g.index.count,24);assert.equal(t.index.count,12);assert.equal(t.attributes.position.count,8);assert.equal(t.attributes.uv.count,8);assert.ok(t.attributes.position.array.every(Number.isFinite));assert.throws(()=>thinLeafPairs(makeBakedCards(2,5)),/unexpected EZ-Tree leaf topology/);t.dispose();g.dispose()});
+
+import {directionCell,AZIMUTHS,ELEVATIONS} from '../src/directional-impostor.js';
+test('directional atlas wraps yaw and brackets elevation',()=>{const a=directionCell(-.01,17.5);assert.equal(a.a0,7);assert.equal(a.a1,0);assert.ok(a.aw>.9);assert.equal(a.e0,1);assert.equal(a.ew,.5);assert.equal(directionCell(0,-90).ew,0);assert.equal(directionCell(0,89).ew,1);assert.equal(AZIMUTHS*ELEVATIONS.length,32)});

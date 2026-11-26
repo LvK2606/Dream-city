@@ -1,7 +1,9 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {rng,groundHeight} from './world.js';
-import {createPrototype,bakePrototype,TREE_ANGLES} from './tree-prototypes.js';
+import {createPrototype} from './tree-prototypes.js';
+import {bakeDirectional,directionalMaterial,proceduralBakeObject} from './directional-impostor.js';
+import {loadFullTree} from './full-tree.js';
 // Original geometry; optional CC0 photographic leaf atlas. Screen-space LOD with hysteresis.
 export function treeLOD(distance,previous,quality){
  const [a,b]=quality==='high'?[55,135]:quality==='medium'?[38,95]:[23,58];
@@ -103,7 +105,7 @@ export function createVegetation(scene,rows,bark,renderer){
  // A subtle two-sided diffuse lift, not emission; neutral instance tint avoids multiplying green twice.
  for(const m of mats){m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;')};m.customProgramCacheKey=()=> 'foliage-soft-diffuse-v1'}
  const depths=[tex,farTex].map(map=>new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map,alphaTest:.35,side:T.DoubleSide}));
- const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'three-axial-baked-cross-cards',cameraFacing:false};
+ const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'azimuth-elevation-directional',cameraFacing:true,fullModel:{loaded:false}};
  const task=photoAtlas().then(async a=>{const old=tex,oldFar=farTex;tex=a.tex;farTex=silhouette(tex);for(let i=0;i<2;i++){mats[i].map=depths[i].map=i?farTex:tex;mats[i].needsUpdate=depths[i].needsUpdate=true}old.dispose();oldFar.dispose();Object.assign(status,{loaded:true,source:a.id,coverage:a.coverage,bytes:a.bytes});await installPrototypes();status.ready=true;lastQuality='';}).catch(e=>{Object.assign(status,{ready:true,loaded:false,error:String(e)});Object.assign(pipeline,{ready:true,loaded:false,error:String(e)})});
  // 3 species x 4 tiers x 2 materials: max 24 main-pass tree submissions.
  // InstancedMesh avoids relying on WEBGL_multi_draw support; mobile compacts visible instances.
@@ -121,16 +123,25 @@ export function createVegetation(scene,rows,bark,renderer){
   batches.push({wood,leaf,count:0,triangles:(geo.wood.index.count+geo.leaf.index.count)/3,baked:false});
  }
  async function installPrototypes(){
-  const pending=[];
+  const pending=[];let full=null;
   try{
-   for(let s=0;s<3;s++){const p=await createPrototype(s);try{const b=bakePrototype(renderer,p,tex);pending.push({p,b})}catch(e){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf])g.dispose();throw e}}
-   for(const {p,b} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
-    const far=batches[species*4+3],mat=new T.MeshStandardMaterial({map:b.texture,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.95});mat.onBeforeCompile=mats[1].onBeforeCompile;mat.customProgramCacheKey=mats[1].customProgramCacheKey;
-    far.leaf.geometry.dispose();far.leaf.geometry=b.geometry;far.leaf.material=mat;far.leaf.customDepthMaterial=null;far.baked=true;far.triangles=b.geometry.index.count/3;
-    pipeline.species.push({species,sourceTriangles:p.detail,nearTriangles:p.reduced,farTriangles:far.triangles,views:TREE_ANGLES.length,coverage:b.coverage,atlas:[b.texture.image.width,b.texture.image.height],radius:b.radius,height:b.height});p.wood.dispose();p.leaf.dispose();
+   try{full=await loadFullTree();pipeline.fullModel=full.report}catch(e){pipeline.fullModel={loaded:false,error:String(e)}}
+   for(let s=0;s<3;s++){
+    const p=await createPrototype(s);let source=null;
+    try{
+     source=s===0&&full?full:proceduralBakeObject(p,tex);
+     const b=bakeDirectional(renderer,source.object,source.box);
+     pending.push({p,b,source:s===0&&full?'polyhaven-full-model':'ez-tree'});
+    }catch(e){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf])g.dispose();throw e}
+    finally{if(source&&source!==full)source.dispose()}
+   }
+   for(const {p,b,source} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
+    const far=batches[species*4+3];far.leaf.geometry.dispose();far.leaf.geometry=b.geometry;far.leaf.material=directionalMaterial(b);far.leaf.customDepthMaterial=null;far.leaf.receiveShadow=false;far.baked=true;far.triangles=b.geometry.index.count/3;
+    pipeline.species.push({species,source,sourceTriangles:p.detail,nearTriangles:p.reduced,farTriangles:far.triangles,views:b.views,coverage:b.coverage,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
    }
    Object.assign(pipeline,{ready:true,loaded:true});
   }catch(e){for(const {p,b} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry])g.dispose();b.texture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}
+  finally{full?.dispose()}
  }
  function update(camera,quality,viewportHeight){
   const pos=camera.position,fov=camera.fov,low=quality==='low';

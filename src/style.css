@@ -28,3 +28,5 @@ body.qa-clean header{display:none!important}
  footer{padding:5px max(8px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));gap:8px;font-size:10px}
  footer #photo{padding:6px}#metrics{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 }
+
+#fps{white-space:nowrap;font-variant-numeric:tabular-nums}@media(max-width:650px){#fps{font-size:10px}.brand{min-width:0}.brand small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:135px}}
