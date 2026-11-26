@@ -1,5 +1,5 @@
 {
   "framework": "vite",
-  "buildCommand": "npm test && npm run build",
+  "buildCommand": "npm test && REQUIRE_PHOTO_ASSETS=1 npm run build",
   "outputDirectory": "dist"
 }

@@ -6,6 +6,8 @@ jobs:
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    env:
+      REQUIRE_PHOTO_ASSETS: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:

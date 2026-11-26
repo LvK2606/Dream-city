@@ -9,3 +9,5 @@ Other previously identified repositories (not integrated; source and license rev
 
 ## V0.3
 [Poly Haven Public API](https://github.com/Poly-Haven/Public-API): build-time downloads, manifest includes provenance and SHA-256, checks publisher MD5 when provided. Assets CC0: [Asphalt 02](https://polyhaven.com/a/asphalt_02), [Leafy Grass](https://polyhaven.com/a/leafy_grass), [Dirty Concrete](https://polyhaven.com/a/dirty_concrete), [Kloofendal 38d Partly Cloudy (Pure Sky)](https://polyhaven.com/a/kloofendal_38d_partly_cloudy_puresky). Runtime only serves local files. Fallback explicitly reported, no claim of successful assets until QA. [Kenney Car Kit](https://kenney.nl/assets/car-kit) researched but low-poly aesthetic not used. Original vehicle geometry and gable roofs. Meshoptimizer remains pending; spatial chunks allow frustum culling without introducing dependencies.
+
+Asset schema compatibility: normalize channel keys and select JPG/PNG from metadata; if missing, attempt official CDN path and record computed SHA-256. Publisher MD5 is checked when supplied; fallback has no publisher digest. Credit: Powered by Poly Haven (see asset source links above).

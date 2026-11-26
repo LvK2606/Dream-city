@@ -8,3 +8,5 @@ See SOURCES.md for actual integration versus research. Browser QA captures deskt
 V0.2: street camera clearance, reduced ambient light, new tower trim and balcony details, slope-based terrain tint, near-tree branches/canopy, GTAO high quality, direct low-quality rendering, reduced reflection frequency, full pipeline counters. Visual improvement pending screenshot comparison. 
 
 V0.3: photo-sourced ground maps and HDR environment when asset acquisition succeeds, explicit fallback status, per-face UV correction, varied roof and tower shapes, beveled cars, spatial chunks, camera-aware reflection cadence and high-tier browser test. Asset downloader uses Poly Haven public API; see SOURCES.md. Set REQUIRE_PHOTO_ASSETS=1 for strict asset validation.
+
+V0.3 asset fix: accepts API channel names such as Diffuse and Rough, JPG or PNG, and official CDN fallback. CI and Vercel builds require all four asset groups. Missing assets cannot pass the release build.
