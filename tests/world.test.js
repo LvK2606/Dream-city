@@ -33,3 +33,6 @@ test('meshoptimizer reduces indexed geometry and retains UVs under error budget'
 import {buildShadowProxies} from '../src/shadow-batching.js';
 import {Scene,Mesh,BoxGeometry,MeshBasicMaterial} from 'three';
 test('shadow-only batching keeps identical static triangle count and hides proxies from main pass',()=>{const s=new Scene(),meshes=[];for(let i=0;i<8;i++){const g=new BoxGeometry(2,3,4);g.translate(i*3,0,0);const m=new Mesh(g,new MeshBasicMaterial());m.castShadow=true;s.add(m);meshes.push(m)}const a=buildShadowProxies(s,meshes);assert.equal(a.sourceTriangles,96);assert.equal(a.triangles,96);assert.equal(a.proxyMeshes,1);assert.ok(meshes.every(m=>!m.castShadow));assert.ok(a.proxies.every(m=>m.castShadow&&!m.visible))});
+
+import {planBuilding} from '../src/architecture.js';
+test('architecture massing preserves floor totals, contiguous heights and bounded setbacks',()=>{const variants=new Set();for(const l of layout()){const p=planBuilding(l);variants.add(l.kind+':'+p.variant);assert.deepEqual(p,planBuilding(l));assert.equal(p.parts.reduce((n,x)=>n+x.floors,0),l.floors);let y=.68;for(const a of p.parts){assert.ok(Math.abs(a.y-y)<1e-8);assert.ok(a.w/2+Math.abs(a.x-l.x)<=l.w/2+.501);assert.ok(a.d/2+Math.abs(a.z-l.z)<=l.d/2+.501);y+=a.h;}assert.ok(Math.abs(y-p.roofY)<1e-8)}assert.ok(variants.size>=16)});
