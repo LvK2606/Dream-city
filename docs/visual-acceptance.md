@@ -24,3 +24,6 @@ Fix high QA race by waiting for actual per-scene sample count (5); capture befor
 
 ## v0.4.5–v0.4.8 cumulative candidate
 See VISUAL_ROADMAP_V048.md. Each stage has a separate source commit; one cumulative preview avoids deployment churn. Existing thresholds unchanged; exact final SHA, 9 screenshots, full CI, dependency audit and visual comparison required. Main remains locked pending acceptance.
+
+## v0.4.9 Backlog Review
+Preserve original nine gates. Require nine additional HUD-free captures and two interaction reports (pause/resume, preset transition, light switch, viewport resize). Record static batching inventory and compare peak draw/triangle costs with v0.4.8. No production or hardware acceptance inferred.
