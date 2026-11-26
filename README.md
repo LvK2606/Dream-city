@@ -16,3 +16,6 @@ V0.4.1: consolidate modular facades to a single quad per window; original proced
 V0.4.2 experiment: near facade uses one room quad per opening; far facade uses four quads per building volume with procedural window grid; stable seeded lights and chunk-distance hysteresis. QA asserts fewer than 65% active window quads from aerial and near windows at street level. Visual parity and measured pipeline performance require CI evidence. Main production remains V0.4.1 until its exact-SHA QA completes.
 
 V0.4.3 experimental real asset pilot: fetch a complete 1K glTF kit, validate size and dependencies, select up to three planar pieces within mesh budget, instance on 12 buildings. Strict browser QA requires actual model placement and photographic sky; no claim that entire city has been replaced. Main remains 0.4.1 until verified.
+
+## v0.4.8 visual roadmap candidate
+See [roadmap](docs/VISUAL_ROADMAP_V048.md), [deferred backlog](docs/DEFERRED_VISUAL_BACKLOG.md) and [visual acceptance](docs/visual-acceptance.md). Candidate is not an approved release; the original main branch is preserved.

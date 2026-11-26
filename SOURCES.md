@@ -35,3 +35,6 @@ Three.js r180 Water.js (MIT) inspected: nested render, mirror camera, shadow upd
 
 ## V0.4.4.4
 Three.js r180 WebGLShadowMap.js and WebGLRenderer.js reviewed. Original depth-only static caster batching retains identical triangles, proxies visible solely during shadow renderer traversal. Original bent near leaf cards and local seeded shrub/grass instancing; no EZ-Tree package or scanned tree mesh claimed. Vite 6.4.6 upgrade verified against upstream release package metadata.
+
+## v0.4.5–v0.4.8
+Original procedural building massing, streets/traffic lanes, park/outcrop layout and night sky; reuse existing Three.js r180 MIT and Poly Haven CC0 assets, Meshoptimizer MIT. No new proprietary assets or source copying.

@@ -43,3 +43,6 @@ Do not conflate permission to plan the next phase with visual acceptance of the 
 - Previous v0.4.4.3 CI: https://github.com/LvK2606/Dream-city/actions/runs/45874733925 (failed; four desktop captures).
 - Previous v0.4.4.2 CI: https://github.com/LvK2606/Dream-city/actions/runs/45873029622 (failed desktop budget).
 - OSS references: https://github.com/zeux/meshoptimizer ; https://github.com/dgreenheck/ez-tree ; https://github.com/donmccurdy/glTF-Transform ; https://github.com/Ctrlmonster/three-octahedral-impostor .
+
+## v0.4.8 candidate update
+Backlog retained in the development branch. Architecture, street, landscape and lighting received original incremental implementations; corresponding backlog items remain OPEN pending evidence and further quality review. v0.4.4.4 local CI 45876486095 completed PASS (17 tests, nine screenshots, audit zero); direct Vercel browser and physical GPU still unverified. Final candidate must undergo its own exact-SHA QA.

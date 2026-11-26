@@ -21,3 +21,6 @@ Prior run 45873029622 failed desktop aerial 463 > 310 total calls. Keep original
 
 ## V0.4.4.4 candidate
 Fix high QA race by waiting for actual per-scene sample count (5); capture before validation, aggregate failures across all nine views. Preserve main, reflection and total budgets; separate shadow counters and cap 40 shadow calls, static depth-only proxy geometry with exact triangle accounting. Add near leaf curvature and distance-limited seeded understory (two instanced submissions), retain Meshoptimizer. Update Vite 6.4.6 and fail on high/critical audit. No claim of fully scanned trees, physical GPU, or Vercel browser acceptance. HOLD until evidence.
+
+## v0.4.5–v0.4.8 cumulative candidate
+See VISUAL_ROADMAP_V048.md. Each stage has a separate source commit; one cumulative preview avoids deployment churn. Existing thresholds unchanged; exact final SHA, 9 screenshots, full CI, dependency audit and visual comparison required. Main remains locked pending acceptance.
