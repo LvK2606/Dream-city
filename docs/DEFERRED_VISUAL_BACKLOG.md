@@ -43,3 +43,40 @@ Do not conflate permission to plan the next phase with visual acceptance of the 
 - Previous v0.4.4.3 CI: https://github.com/LvK2606/Dream-city/actions/runs/45874733925 (failed; four desktop captures).
 - Previous v0.4.4.2 CI: https://github.com/LvK2606/Dream-city/actions/runs/45873029622 (failed desktop budget).
 - OSS references: https://github.com/zeux/meshoptimizer ; https://github.com/dgreenheck/ez-tree ; https://github.com/donmccurdy/glTF-Transform ; https://github.com/Ctrlmonster/three-octahedral-impostor .
+
+## v0.4.8 candidate update
+Backlog retained in the development branch. Architecture, street, landscape and lighting received original incremental implementations; corresponding backlog items remain OPEN pending evidence and further quality review. v0.4.4.4 local CI 45876486095 completed PASS (17 tests, nine screenshots, audit zero); direct Vercel browser and physical GPU still unverified. Final candidate must undergo its own exact-SHA QA.
+
+
+## v0.4.8 acceptance review — 2026-11-27 ICT
+Candidate: `b97e3e931fba715b26fa31ce2e12560a48e84eaa`. Local CI [45877992509](https://github.com/LvK2606/Dream-city/actions/runs/45877992509) PASS, 21/21 tests, zero audit vulnerabilities, 9/9 captures and reports, zero budget failures. Artifact 15145781647 SHA256 d6b1a3950c9699c46dcc09155436076ec33f73cb39cfaeb922b305356d962211. Baseline artifact 15146185222 SHA256 29a3ae5315a5aeaf142c655c48d3334f38a8bea56de28546208cb46513aedecb. Both archives verified against GitHub digest, CRC and report build SHA; all nine image pairs reviewed as contact sheets. Vercel deployment READY, exact git SHA and release.json verified; actual deployed browser capture skipped on experimental branch. SwiftShader is software rendering, not physical GPU validation.
+
+### Measured regression watch (peak per-scene draw calls, baseline → v0.4.8)
+| Scene | Main/low calls | Reflection calls | Total calls | Peak triangles v0.4.8 |
+|---|---:|---:|---:|---:|
+| Desktop aerial day | 233 → 253 | 230 → 250 | 468 → 508 | 404200 |
+| Desktop street day | 123 → 129 | 123 → 131 | 257 → 271 | 396460 |
+| Desktop river sunset | 179 → 192 | 163 → 176 | 353 → 379 | 413578 |
+| Desktop aerial night | 249 → 268 | 230 → 250 | 484 → 523 | 407250 |
+| Desktop high street | 251 → 263 | 246 → 262 | 508 → 536 | 791443 |
+| Mobile aerial day | 160 → 170 | 0 | 160 → 170 | 162696 |
+| Mobile street day | 77 → 83 | 0 | 77 → 83 | 142568 |
+| Mobile river sunset | 93 → 104 | 0 | 93 → 104 | 150046 |
+| Mobile aerial night | 160 → 170 | 0 | 160 → 170 | 163404 |
+
+All existing gates pass. Remaining headroom is tight for desktop aerial reflection (10 calls) and mobile river (6 calls). Maximum shadow calls 11, cap 40. Do not spend the remaining budget without profiling and batching improvements.
+
+### Additional open issues from actual screenshot review and implementation audit
+| ID | Priority | Finding / unfinished work | Acceptance criteria |
+|---|---|---|---|
+| ARCH-02 | P1 | 20 massing variants/247 volumes exist, but facade grid repetition, uniform blocks and red residential roofs still look generic; roof/entrance detail insufficient. ARCH-01 remains open. | Diverse real licensed building kits and materials across districts; close-up and skyline comparisons; maintain footprint and budget. |
+| STREET-02 | P1 | New lane markings/6 shelters/32 signal props/46 lanes; road still looks sparse, no real signal logic, intersection conflict handling, pedestrians or varied vehicle bodies. | Visual street density plus deterministic intersection tests; signal phases, no collisions and connected routing; no claim of full traffic simulation until tested. |
+| LAND-02 | P1 | Four parks and 112 rock instances exist; distant hills still look smooth, bare and patchy, vegetation remains card-like; riverbank hard edges. | Terrain layers/material blending, forest ecosystem, more natural shoreline; near and aerial comparisons without clipping. |
+| RENDER-02 | P1 | Night blue sky and roof emission improved, but city lighting still mostly window emission, streets dark and some bright daytime/sunset water reflections look artificial; no moving-camera validation of reflection cache. | Plausible street illumination, consistent sky/environment, water and fog; day/night and motion captures; no reflection lag/popping. |
+| PERF-01 | P1 | New detail increased draw calls in all nine scenes; mobile river 104/110, desktop aerial reflection 250/260. High mode peaks at 791443 triangles. | Profile per material/pass; batch and LOD assets; preserve or improve images and reduce bottleneck costs; verify on hardware. |
+| UI-01 | P1 | Mobile bottom panel obscures a large part of the scene; screenshot coverage incomplete because HUD visible. | Collapsible mobile panel, clean capture mode, responsive input tests and UI-free comparison captures. |
+| QA-06 | P0 final release | Current nine screenshots are fixed poses. No motion, camera sweep, gameplay input, long-session stability, physical-device or deployed-browser evidence. | Exact deployed SHA with authorized browser; motion/interaction/resize tests; sustained physical GPU run; screenshots without HUD; preserve raw reports and failure evidence. |
+| SIM-01 | P1 roadmap scope | Visual alpha is not a functional Cities: Skylines II clone: construction, zoning, economy, services, citizens, traffic simulation and saves not implemented by these four visual phases. | Separate feature roadmap, gameplay tests and persisted state; no claim of parity. |
+
+### Decision
+GO for backlog review / further development only; local CI accepted, visual improvements are incremental and not AAA. NO-GO for final v0.5/production acceptance or merging main based solely on these results. Original VEG-01/02/03 and QA-02/03 remain open. Resolve final release gates, preserve measured baseline and inspect exact deployment before any final approval.
