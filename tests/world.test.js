@@ -20,3 +20,6 @@ test('vegetation LOD keeps hysteresis and strictly reduces geometry',()=>{assert
 
 import {pixelLOD,projectedTreePixels} from '../src/vegetation.js';
 test('projected vegetation LOD responds to scale and viewport, four decreasing tiers',()=>{assert.equal(pixelLOD(200,-1,'medium'),0);assert.equal(pixelLOD(80,-1,'medium'),1);assert.equal(pixelLOD(35,-1,'medium'),2);assert.equal(pixelLOD(10,-1,'medium'),3);assert.equal(pixelLOD(60,2,'medium'),2);assert.ok(projectedTreePixels(2,50,800,48)>projectedTreePixels(1,50,800,48));assert.ok(projectedTreePixels(1,50,800,48)>projectedTreePixels(1,100,800,48));for(let s=0;s<3;s++){let prev=Infinity;for(let l=0;l<4;l++){const g=makeTreeGeometry(s,l),n=(g.wood.index.count+g.leaf.index.count)/3;assert.ok(n<prev);prev=n;for(const x of Object.values(g))x.dispose()}}});
+
+import {forestPosition} from '../src/vegetation.js';
+test('forest grouping preserves river, developed area and world bounds',()=>{for(let x=-235;x<=235;x+=5)for(let z=-235;z<=235;z+=5){if(Math.abs(x)<24||(Math.abs(x)<160&&Math.abs(z)<123))continue;const [a,b]=forestPosition(x,z);assert.ok(Math.abs(a)>=24);assert.ok(Math.abs(a)>=160||Math.abs(b)>=123);assert.ok(Math.abs(a)<=237.5&&Math.abs(b)<=237.5);assert.deepEqual([a,b],forestPosition(x,z));}});

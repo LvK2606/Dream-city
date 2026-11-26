@@ -23,6 +23,14 @@ export function pixelLOD(p,previous,quality){
  }
  return target;
 }
+// Seeded spatial ecology; preserves the original city and river exclusion boundaries.
+export function forestPosition(x,z){
+ const field=Math.sin(x*.038+z*.019)*Math.cos(z*.032-x*.013);
+ const angle=Math.sin(x*.071-z*.047)*Math.PI;
+ const nx=x+Math.cos(angle)*(1-field)*6,nz=z+Math.sin(angle)*(1-field)*6;
+ if(Math.abs(nx)<24||(Math.abs(nx)<160&&Math.abs(nz)<123))return [x,z];
+ return [Math.max(-237.5,Math.min(237.5,nx)),Math.max(-237.5,Math.min(237.5,nz))];
+}
 export function makeTreeGeometry(species,lod){
  const rand=rng(775+species*81), wood=[],leaf=[];
  const taper=species===1, height=taper?5.1:species===2?4.15:4.5, radius=taper?1.35:species===2?2.0:1.7;
@@ -38,10 +46,10 @@ export function makeTreeGeometry(species,lod){
   const theta=j*2.399963, t=(j+.5)/clusters, y=lod===3?height*.66:height*(.46+.48*t);
   const reach=lod===3?0:radius*(.25+.48*Math.sin(Math.PI*t))*(.85+rand()*.3);
   const x=Math.cos(theta)*reach,z=Math.sin(theta)*reach;
-  if(lod===0&&j%2===0)limb([.05,height*.3+height*.16*t,0],[x,y-.18,z],.055,.017,4);
+  if(lod===0&&j%2===0){const root=[.05,height*.3+height*.16*t,0],tip=[x,y-.18,z];limb(root,tip,.055,.017,4);const bend=[x*.70,y-.40,z*.70];limb(bend,[x+Math.cos(theta+.8)*.42,y+.30,z+Math.sin(theta+.8)*.42],.024,.007,3);}
   for(let k=0;k<cards;k++){
    const g=new T.PlaneGeometry(lod===3?radius*2.45:radius*(lod===2?1.65:1.10+rand()*.30),lod===3?height*.78:height*(lod===2?.49:.32+rand()*.10));
-   g.rotateZ(lod===3?0:(rand()-.5)*.48);g.rotateX(lod===3?0:(rand()-.5)*.64);g.rotateY(theta+k*Math.PI/cards);
+   g.rotateZ(lod===3?0:(rand()-.5)*.48);g.rotateX(lod===3?(k===2?.95:0):(rand()-.5)*.64);g.rotateY(theta+k*Math.PI/cards);
    g.translate(x,y,z);leaf.push(g);
   }
  }
@@ -96,32 +104,38 @@ export function createVegetation(scene,rows,bark){
  const depths=[tex,farTex].map(map=>new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map,alphaTest:.35,side:T.DoubleSide}));
  const status={ready:false,loaded:false,source:'procedural-fallback'};
  const task=photoAtlas().then(a=>{const old=tex,oldFar=farTex;tex=a.tex;farTex=silhouette(tex);for(let i=0;i<2;i++){mats[i].map=depths[i].map=i?farTex:tex;mats[i].needsUpdate=depths[i].needsUpdate=true}old.dispose();oldFar.dispose();Object.assign(status,{ready:true,loaded:true,source:a.id,coverage:a.coverage,bytes:a.bytes});lastQuality='';}).catch(e=>Object.assign(status,{ready:true,loaded:false,error:String(e)}));
- const groups=new Map(),state=rows.map(()=>-1),dummy=new T.Object3D(),color=new T.Color(),last=new T.Vector3(Infinity,Infinity,Infinity);let lastQuality='',lastHeight=0,lastFov=0,stats;
- // Spatial groups bound each instance buffer to its own region, allowing native camera and reflection frustum culling.
- rows.forEach((r,i)=>{const species=r.c<.32?1:r.c<.64?0:2,key=Math.floor(r.x/128)+':'+Math.floor(r.z/128)+':'+species;let g=groups.get(key);if(!g){g={species,rows:[],batches:[]};groups.set(key,g)}g.rows.push({r,i})});
+ // 3 species x 4 tiers x 2 materials: max 24 main-pass tree submissions.
+ // InstancedMesh avoids relying on WEBGL_multi_draw support; mobile compacts visible instances.
+ const state=rows.map(()=>-1),dummy=new T.Object3D(),color=new T.Color(),last=new T.Vector3(Infinity,Infinity,Infinity),lastRotation=new T.Quaternion(),frustum=new T.Frustum(),pv=new T.Matrix4(),bound=new T.Sphere();
+ const plants=rows.map((r,i)=>({r,i,species:r.species??(r.c<.32?1:r.c<.64?0:2)}));
+ const regions=new Set(rows.map(r=>Math.floor(r.x/128)+':'+Math.floor(r.z/128)));
  const geometry=Array.from({length:3},(_,s)=>Array.from({length:4},(_,l)=>makeTreeGeometry(s,l)));
- for(const g of groups.values())for(let lod=0;lod<4;lod++){
-  const geo=geometry[g.species][lod],capacity=g.rows.length,atlas=lod>=2?1:0;
+ const batches=[];let lastQuality='',lastHeight=0,lastFov=0,lastAspect=0,stats;
+ for(let species=0;species<3;species++)for(let lod=0;lod<4;lod++){
+  const geo=geometry[species][lod],capacity=plants.filter(p=>p.species===species).length,atlas=lod>=2?1:0;
   const wood=new T.InstancedMesh(geo.wood,bark,capacity),leaf=new T.InstancedMesh(geo.leaf,mats[atlas],capacity);
   for(const m of [wood,leaf]){m.count=0;m.visible=false;m.instanceMatrix.setUsage(T.DynamicDrawUsage);m.receiveShadow=true;scene.add(m)}
   leaf.customDepthMaterial=depths[atlas];wood.castShadow=leaf.castShadow=lod===0;
-  g.batches.push({wood,leaf,count:0,triangles:(geo.wood.index.count+geo.leaf.index.count)/3});
+  batches.push({wood,leaf,count:0,triangles:(geo.wood.index.count+geo.leaf.index.count)/3});
  }
  function update(camera,quality,viewportHeight){
-  const pos=camera.position,fov=camera.fov;
-  if(quality===lastQuality&&viewportHeight===lastHeight&&fov===lastFov&&last.distanceToSquared(pos)<1)return false;
-  last.copy(pos);lastQuality=quality;lastHeight=viewportHeight;lastFov=fov;
-  const counts=[0,0,0,0];let triangles=0,activeBatches=0;
-  for(const g of groups.values()){
-   for(const b of g.batches)b.count=0;
-   for(const {r,i} of g.rows){
-    const dist=Math.hypot(pos.x-r.x,pos.y-r.y-2*r.s,pos.z-r.z),lod=pixelLOD(projectedTreePixels(r.s,dist,viewportHeight,fov),state[i],quality);state[i]=lod;
-    const b=g.batches[lod],index=b.count++;dummy.position.set(r.x,r.y,r.z);dummy.rotation.set(0,r.a,0);dummy.scale.setScalar(r.s);dummy.updateMatrix();b.wood.setMatrixAt(index,dummy.matrix);b.leaf.setMatrixAt(index,dummy.matrix);
-    const v=.88+r.c*.12;color.setRGB(v,v,v);b.leaf.setColorAt(index,color);counts[lod]++;triangles+=b.triangles;
-   }
-   for(const b of g.batches){if(b.count)activeBatches++;for(const m of [b.wood,b.leaf]){m.count=b.count;m.visible=b.count>0;if(b.count){m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;m.computeBoundingSphere()}}}
+  const pos=camera.position,fov=camera.fov,low=quality==='low';
+  const sameView=!low||Math.abs(lastRotation.dot(camera.quaternion))>.99998;
+  if(quality===lastQuality&&viewportHeight===lastHeight&&fov===lastFov&&camera.aspect===lastAspect&&sameView&&last.distanceToSquared(pos)<.16)return false;
+  last.copy(pos);lastRotation.copy(camera.quaternion);lastQuality=quality;lastHeight=viewportHeight;lastFov=fov;lastAspect=camera.aspect;
+  if(low){camera.updateMatrixWorld();pv.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(pv);}
+  for(const b of batches)b.count=0;
+  const counts=[0,0,0,0],visibleLevels=[0,0,0,0];let triangles=0,activeBatches=0,culled=0;
+  for(const {r,i,species} of plants){
+   const dist=Math.hypot(pos.x-r.x,pos.y-r.y-2*r.s,pos.z-r.z),lod=pixelLOD(projectedTreePixels(r.s,dist,viewportHeight,fov),state[i],quality);state[i]=lod;counts[lod]++;
+   // Low mode has neither reflection nor shadow passes; padded conservative sphere prevents edge popping.
+   if(low){bound.center.set(r.x,r.y+2.7*r.s,r.z);bound.radius=4.4*r.s+1.2;if(!frustum.intersectsSphere(bound)){culled++;continue}}
+   const b=batches[species*4+lod],index=b.count++;dummy.position.set(r.x,r.y,r.z);dummy.rotation.set(0,r.a,0);dummy.scale.setScalar(r.s);dummy.updateMatrix();b.wood.setMatrixAt(index,dummy.matrix);b.leaf.setMatrixAt(index,dummy.matrix);
+   const val=.88+r.c*.12;color.setRGB(val,val,val);b.leaf.setColorAt(index,color);visibleLevels[lod]++;triangles+=b.triangles;
   }
-  stats={near:counts[0],mid:counts[1],far:counts[2]+counts[3],levels:counts,total:rows.length,triangles,source:status.source,species:3,legacyCanopy:false,regions:groups.size,activeBatches,neutralTint:true};return true;
+  for(const b of batches){if(b.count)activeBatches++;for(const m of [b.wood,b.leaf]){m.count=b.count;m.visible=b.count>0;if(b.count){m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;m.computeBoundingSphere()}}}
+  stats={near:counts[0],mid:counts[1],far:counts[2]+counts[3],levels:counts,visibleLevels,total:rows.length,rendered:rows.length-culled,culled,triangles,source:status.source,species:3,legacyCanopy:false,regions:regions.size,activeBatches,mainPassDrawUpperBound:activeBatches*2,neutralTint:true,strategy:'global-species-lod/mobile-frustum'};
+  return true;
  }
  return {update,report:()=>({...stats,assets:{...status}})};
 }

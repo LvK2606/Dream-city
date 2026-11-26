@@ -26,3 +26,6 @@ Poly Haven Modular Urban Apartments Facade (CC0), official API and individual gl
 
 ## V0.4.4.1
 Poly Haven Tree Small 02 (CC0): https://polyhaven.com/a/tree_small_02 — candidate photographic diffuse and opacity leaf maps, fetched from official API, hashed, and composited into original foliage cards. Full source model is about 5M tris and is not ingested. Runtime reports actual load and opacity coverage, not merely asset availability. Procedural fallback remains explicit; CI requires photographic maps. Original projected-size LOD and spatial instancing.
+
+## V0.4.4.2
+Three.js r180 InstancedMesh (MIT existing dependency) used for global species/LOD batches; CPU conservative sphere-frustum compaction in low mode only. No WEBGL_multi_draw dependency. Original near branch and forest placement refinements; no external model geometry or Meshoptimizer yet. Photo leaf asset retained.

@@ -12,3 +12,6 @@ Replace legacy solid ico canopies with original textured leaf cards, tapered bra
 
 ## V0.4.4.1 candidate
 Four projected-size tiers, neutral leaf tint, soft diffuse lighting, full silhouette atlas, region-local instancing, frame interval telemetry. Actual photo maps required by CI; fallback is not acceptance. No full scanned mesh or GPU claim. Compare all 9 shots with d03d1940; HOLD V0.4.5 pending evidence and GPU budget.
+
+## V0.4.4.2 candidate
+Baseline CI e0a85596 (45871988067) passed but draw calls increased: mobile aerial 215, street 107, river 127; desktop aerial 343, street 194. Replace region/species/LOD mesh proliferation with max 24 main-pass tree submissions; conservative mobile per-tree frustum compaction, desktop preserves shadow/reflection population. Gate mobile triangles <=200000 and per-scene draw call ceilings; report failures after capture. Reset scene timing and identify reflection passes. Original branching and forest position changes; actual optimized scanned model, understory library, genuine baked impostors, physical GPU and deployed-browser verification remain outstanding. HOLD V0.4.5 pending screenshots, metrics and review.
