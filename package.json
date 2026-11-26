@@ -1,6 +1,6 @@
 {
   "name": "dream-city",
-  "version": "0.4.4-fix.2",
+  "version": "0.4.4-fix.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "test": "node --test tests/world.test.js"
   },
   "dependencies": {
-    "three": "0.180.0"
+    "three": "0.180.0",
+    "meshoptimizer": "0.24.0"
   },
   "devDependencies": {
     "vite": "6.3.6"

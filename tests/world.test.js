@@ -23,3 +23,9 @@ test('projected vegetation LOD responds to scale and viewport, four decreasing t
 
 import {forestPosition} from '../src/vegetation.js';
 test('forest grouping preserves river, developed area and world bounds',()=>{for(let x=-235;x<=235;x+=5)for(let z=-235;z<=235;z+=5){if(Math.abs(x)<24||(Math.abs(x)<160&&Math.abs(z)<123))continue;const [a,b]=forestPosition(x,z);assert.ok(Math.abs(a)>=24);assert.ok(Math.abs(a)>=160||Math.abs(b)>=123);assert.ok(Math.abs(a)<=237.5&&Math.abs(b)<=237.5);assert.deepEqual([a,b],forestPosition(x,z));}});
+
+import {reflectionDecision,subtractPass,summarizeFrames} from '../src/render-budget.js';
+test('reflection cache distinguishes motion, idle, invalidation and low mode',()=>{assert.equal(reflectionDecision({elapsed:1,moved:true,quality:'medium'}),false);assert.equal(reflectionDecision({elapsed:300,moved:true,quality:'medium'}),true);assert.equal(reflectionDecision({elapsed:300,moved:false,quality:'medium'}),false);assert.equal(reflectionDecision({elapsed:0,moved:false,quality:'high',invalid:true}),true);assert.equal(reflectionDecision({elapsed:9000,moved:true,quality:'low',invalid:true}),false);assert.deepEqual(subtractPass({calls:463,triangles:420000},{calls:225,triangles:210000}),{calls:238,triangles:210000});assert.equal(summarizeFrames([{calls:10,mainCalls:7,reflectionCalls:3},{calls:8,mainCalls:8,reflectionCalls:0}]).reflectionSamples,1)});
+import {simplifyPanel} from '../src/mesh-optimization.js';
+import {PlaneGeometry} from 'three';
+test('meshoptimizer reduces indexed geometry and retains UVs under error budget',async()=>{const g=new PlaneGeometry(10,10,16,16),old=g.index.count,uv=g.attributes.uv;const s=await simplifyPanel(g);assert.ok(s.applied);assert.ok(g.index.count<old);assert.equal(g.attributes.uv,uv);assert.ok(s.error<=.008);g.dispose()});
