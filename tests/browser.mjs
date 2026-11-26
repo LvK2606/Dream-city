@@ -9,7 +9,7 @@ const check=(ok,msg)=>{if(!ok)failures.push(msg)};
 function validate(s,name,cam,light,high){
  const k=name+'/'+cam+'/'+light+(high?'/high':''),v=s.vegetation,p=s.passes.window;
  const ck=(ok,msg)=>check(ok,k+' '+msg);
- ck(s.version==='0.4.10','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
+ ck(s.version==='0.4.10.1','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
  ck(s.architecture.variants>=16&&s.architecture.volumes>s.buildings&&s.architecture.buildings===s.buildings,'architecture massing');
  ck(s.streets.markings>100&&s.streets.furniture===6&&s.streets.signals>20&&s.streets.lanes>30&&s.cars===100,'street detail and traffic');
  ck(s.landscape.parks===4&&s.landscape.paths===12&&s.landscape.rocks>=40&&s.landscape.triangles<=2240&&s.landscape.drawUpperBound===1,'landscape kit');

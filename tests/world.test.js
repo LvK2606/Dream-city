@@ -67,5 +67,8 @@ test('interaction report cannot pass with a failed assertion, exception or empty
  assert.equal(interactionResult('mobile',[],{}).passed,false);
 });
 
-import {atlasUV,makeBakedCards,TREE_ANGLES,prototypeOptions} from '../src/tree-prototypes.js';
+import {atlasUV,makeBakedCards,TREE_ANGLES,thinLeafPairs,createPrototype} from '../src/tree-prototypes.js';
 test('baked cards use separate atlas cells with gutters and six triangles',()=>{const g=makeBakedCards(2,5);assert.equal(g.index.count/3,6);for(let i=0;i<3;i++){const a=atlasUV(0,0,i),b=atlasUV(1,1,i);assert.ok(a[0]>i/3&&b[0]<(i+1)/3&&a[1]>0&&b[1]<1)}assert.equal(TREE_ANGLES.length,3);g.dispose()});
+
+test('Node can import asset adapter without browser-only texture loads',async()=>{await assert.rejects(()=>createPrototype(0),/require browser DOM/)});
+test('released EZ-Tree double-leaf topology reduction preserves indexed pairs and UVs',()=>{const g=makeBakedCards(2,5,[0,1,2,3]);const t=thinLeafPairs(g);assert.equal(g.index.count,24);assert.equal(t.index.count,12);assert.equal(t.attributes.position.count,8);assert.equal(t.attributes.uv.count,8);assert.ok(t.attributes.position.array.every(Number.isFinite));assert.throws(()=>thinLeafPairs(makeBakedCards(2,5)),/unexpected EZ-Tree leaf topology/);t.dispose();g.dispose()});

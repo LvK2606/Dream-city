@@ -98,3 +98,6 @@ Base `202a0b03da3974d4dec809616b6d90762d44a627`: CI 45879015817 FAIL solely on d
 CI 45880630327 PASS on d9ada7ca6df889fe9153d310c7484812b2991115, 20 captures, 9 budgets, 19 interaction assertions, zero audit vulnerabilities. Artifact 15148055119 SHA256 4b75e5c6adfcbe4a1c918a7c7c79b019f6e4d6199b37f01d3ec4e55a4a5f0179. GO for AAA Asset Pipeline development only. Physical GPU/deployed-browser gates remain open.
 ## v0.4.10 asset pipeline candidate
 VEG-03 pinned EZ-Tree 1.1.0, custom seeded prototypes and 3 axial baked views per species; VEG-02 partial (fixed cross cards, not full view-dependent octahedral). ASSET-01 decoder support enabled; actual KTX2 encoder/compressed input and full scanned tree VEG-01 remain OPEN. All existing backlog retained. See AAA_ASSET_PIPELINE.md. No closure before CI and visual evidence.
+
+## v0.4.10.1 corrective candidate
+CI 45882548893 and Vercel GoyxXtUdRAg5T8nPJeDTziW3UXjH failed before build on browser-only eager EZ-Tree texture import in Node. Exact release source also lacks generateLODs. Browser-only dynamic import and released generate API, same-geometry leaf-pair reduction, Node-safe regression tests. Existing gates unchanged; VEG-02/03 remain open pending visual evidence. See AAA_ASSET_PIPELINE.md.

@@ -41,3 +41,6 @@ Original procedural building massing, streets/traffic lanes, park/outcrop layout
 
 ## v0.4.10 OSS asset adapter
 EZ-Tree 1.1.0 (MIT, Daniel Greenheck) pinned npm, original adapter; photo leaves remain Poly Haven CC0. Three.js r180 MIT KTX2Loader, Meshopt decoder and bundled Basis transcoder (Apache-2.0). Review matrix in docs/AAA_ASSET_PIPELINE.md. No upstream source copied outside library dependency. Decoder readiness is not compressed-input validation.
+
+## v0.4.10.1
+EZ-Tree exact v1.1.0 release commit 89083a033a354856acae05f8856bf37c6ebcfa9b inspected; generate() API and eager texture import verified. Original indexed leaf-pair thinning adapter uses released geometry, not unreleased generateLODs().

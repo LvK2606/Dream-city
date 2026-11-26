@@ -104,7 +104,7 @@ export function createVegetation(scene,rows,bark,renderer){
  for(const m of mats){m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;')};m.customProgramCacheKey=()=> 'foliage-soft-diffuse-v1'}
  const depths=[tex,farTex].map(map=>new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map,alphaTest:.35,side:T.DoubleSide}));
  const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'three-axial-baked-cross-cards',cameraFacing:false};
- const task=photoAtlas().then(a=>{const old=tex,oldFar=farTex;tex=a.tex;farTex=silhouette(tex);for(let i=0;i<2;i++){mats[i].map=depths[i].map=i?farTex:tex;mats[i].needsUpdate=depths[i].needsUpdate=true}old.dispose();oldFar.dispose();Object.assign(status,{loaded:true,source:a.id,coverage:a.coverage,bytes:a.bytes});installPrototypes();status.ready=true;lastQuality='';}).catch(e=>{Object.assign(status,{ready:true,loaded:false,error:String(e)});Object.assign(pipeline,{ready:true,loaded:false,error:String(e)})});
+ const task=photoAtlas().then(async a=>{const old=tex,oldFar=farTex;tex=a.tex;farTex=silhouette(tex);for(let i=0;i<2;i++){mats[i].map=depths[i].map=i?farTex:tex;mats[i].needsUpdate=depths[i].needsUpdate=true}old.dispose();oldFar.dispose();Object.assign(status,{loaded:true,source:a.id,coverage:a.coverage,bytes:a.bytes});await installPrototypes();status.ready=true;lastQuality='';}).catch(e=>{Object.assign(status,{ready:true,loaded:false,error:String(e)});Object.assign(pipeline,{ready:true,loaded:false,error:String(e)})});
  // 3 species x 4 tiers x 2 materials: max 24 main-pass tree submissions.
  // InstancedMesh avoids relying on WEBGL_multi_draw support; mobile compacts visible instances.
  const state=rows.map(()=>-1),dummy=new T.Object3D(),color=new T.Color(),last=new T.Vector3(Infinity,Infinity,Infinity),lastRotation=new T.Quaternion(),frustum=new T.Frustum(),pv=new T.Matrix4(),bound=new T.Sphere();
@@ -120,10 +120,10 @@ export function createVegetation(scene,rows,bark,renderer){
   leaf.customDepthMaterial=depths[atlas];wood.castShadow=leaf.castShadow=lod===0;
   batches.push({wood,leaf,count:0,triangles:(geo.wood.index.count+geo.leaf.index.count)/3,baked:false});
  }
- function installPrototypes(){
+ async function installPrototypes(){
   const pending=[];
   try{
-   for(let s=0;s<3;s++){const p=createPrototype(s);try{const b=bakePrototype(renderer,p,tex);pending.push({p,b})}catch(e){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf])g.dispose();throw e}}
+   for(let s=0;s<3;s++){const p=await createPrototype(s);try{const b=bakePrototype(renderer,p,tex);pending.push({p,b})}catch(e){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf])g.dispose();throw e}}
    for(const {p,b} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
     const far=batches[species*4+3],mat=new T.MeshStandardMaterial({map:b.texture,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.95});mat.onBeforeCompile=mats[1].onBeforeCompile;mat.customProgramCacheKey=mats[1].customProgramCacheKey;
     far.leaf.geometry.dispose();far.leaf.geometry=b.geometry;far.leaf.material=mat;far.leaf.customDepthMaterial=null;far.baked=true;far.triangles=b.geometry.index.count/3;

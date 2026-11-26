@@ -1,5 +1,4 @@
 import * as T from 'three';
-import {Tree} from '@dgreenheck/ez-tree';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 // Original adapter: seeded EZ-Tree skeleton, bounded prototype meshes, photographic host textures.
 // Three axial views are genuinely rendered from the source mesh, not painted foliage collages.
@@ -12,11 +11,11 @@ export function atlasUV(u,v,view,tiles=TREE_ANGLES.length,tile=TREE_TILE){
 export function prototypeOptions(tree,species){
  const o=tree.options,h=[14,17,12][species],length=[8,5,9][species];
  o.seed=775+81*species;o.bark.textured=false;o.branch.levels=2;
- Object.assign(o.branch.children,{0:7,1:3,2:0});
+ Object.assign(o.branch.children,{0:5,1:2,2:0});
  Object.assign(o.branch.length,{0:h,1:length,2:3.5});
  Object.assign(o.branch.radius,{0:.50,1:.43,2:.40});
- Object.assign(o.branch.sections,{0:8,1:5,2:3});
- Object.assign(o.branch.segments,{0:6,1:4,2:3});
+ Object.assign(o.branch.sections,{0:5,1:4,2:3});
+ Object.assign(o.branch.segments,{0:5,1:4,2:3});
  Object.assign(o.branch.start,{1:.36,2:.25});
  Object.assign(o.branch.angle,{1:[49,35,61][species],2:55});
  Object.assign(o.branch.gnarliness,{0:.09,1:.12,2:.13});
@@ -25,19 +24,44 @@ export function prototypeOptions(tree,species){
 }
 function bounds(wood,leaf){wood.computeBoundingBox();leaf.computeBoundingBox();return wood.boundingBox.clone().union(leaf.boundingBox)}
 function normalizedPair(wood,leaf,b,scale){const center=b.getCenter(new T.Vector3());return [wood,leaf].map(g=>{const x=g.clone();x.translate(-center.x,-b.min.y,-center.z);x.scale(scale,scale,scale);x.computeBoundingBox();x.computeBoundingSphere();return x})}
-export function createPrototype(species){
+// Release 1.1.0 emits independent indexed leaf quads, two per double billboard.
+// Keep both perpendicular cards of every other leaf, with modest canopy-area compensation.
+// The original branch mesh and leaf placement are preserved; no unsupported release API.
+export function thinLeafPairs(g,stride=2,scale=1.18){
+ const ix=g.index,position=g.attributes.position;
+ if(!ix||ix.count%12!==0||position.count!==ix.count/6*4||!Number.isInteger(stride)||stride<1)throw Error('unexpected EZ-Tree leaf topology');
+ const p=[],uv=[],idx=[],sourceUV=g.attributes.uv;
+ for(let pair=0;pair<ix.count/12;pair+=stride){
+  for(let c=0;c<2;c++){
+   const v=pair*8+c*4,base=p.length/3,center=new T.Vector3();
+   for(let j=0;j<4;j++){const a=v+j;center.add(new T.Vector3().fromBufferAttribute(position,a))}
+   center.multiplyScalar(.25);
+   for(let j=0;j<4;j++){const a=v+j,q=new T.Vector3().fromBufferAttribute(position,a).sub(center).multiplyScalar(scale).add(center);p.push(q.x,q.y,q.z);uv.push(sourceUV.getX(a),sourceUV.getY(a))}
+   idx.push(base,base+1,base+2,base,base+2,base+3);
+  }
+ }
+ const out=new T.BufferGeometry();out.setAttribute('position',new T.Float32BufferAttribute(p,3));out.setAttribute('uv',new T.Float32BufferAttribute(uv,2));out.setIndex(idx);out.computeVertexNormals();out.computeBoundingBox();out.computeBoundingSphere();return out;
+}
+export async function createPrototype(species){
+ // Published npm 1.1.0 eagerly loads images at import time; never load it in Node unit tests.
+ if(typeof document==='undefined')throw Error('EZ-Tree prototypes require browser DOM');
+ const {Tree}=await import('@dgreenheck/ez-tree');
  const tree=prototypeOptions(new Tree(),species);
  try{
-  tree.generateLODs([{distance:0,detail:{}},{distance:1,detail:{sectionStride:3,segmentFactor:.6,leafStride:3,leafScale:1.55,billboard:'single'}}]);
-  const full=tree.lod.levels[0].object.children,near=tree.lod.levels[1].object.children;
-  const b=bounds(full[0].geometry,full[1].geometry),height=[4.5,5.1,4.15][species],scale=height/(b.max.y-b.min.y);
+  if(typeof tree.generate!=='function')throw Error('EZ-Tree 1.1.0 generate unavailable');
+  tree.generate();
+  const srcWood=tree.branchesMesh.geometry,srcLeaf=tree.leavesMesh.geometry;
+  const b=bounds(srcWood,srcLeaf),height=[4.5,5.1,4.15][species],scale=height/(b.max.y-b.min.y);
   if(!Number.isFinite(scale)||scale<=0)throw Error('invalid EZ-Tree bounds');
-  const [wood,leaf]=normalizedPair(full[0].geometry,full[1].geometry,b,scale);
-  const [nearWood,nearLeaf]=normalizedPair(near[0].geometry,near[1].geometry,b,scale);
+  const [wood,leaf]=normalizedPair(srcWood,srcLeaf,b,scale);
+  const nearWood=wood.clone(),nearLeaf=thinLeafPairs(leaf);
   const tri=(w,l)=>(w.index.count+l.index.count)/3;
   const detail=tri(wood,leaf),reduced=tri(nearWood,nearLeaf),bb=bounds(wood,leaf);
   const radius=Math.max(Math.abs(bb.min.x),Math.abs(bb.max.x),Math.abs(bb.min.z),Math.abs(bb.max.z));
-  if(!(detail>reduced&&reduced>0&&reduced<=1600&&radius>0&&radius<6))throw Error('EZ-Tree prototype budget '+detail+'/'+reduced+' r='+radius);
+  if(!(detail>reduced&&reduced>0&&reduced<=1600&&radius>0&&radius<6)){
+   for(const g of [wood,leaf,nearWood,nearLeaf])g.dispose();
+   throw Error('EZ-Tree prototype budget '+detail+'/'+reduced+' r='+radius);
+  }
   return {wood,leaf,nearWood,nearLeaf,height,radius,detail,reduced,species};
  }finally{
   const gs=new Set(),ms=new Set();tree.traverse(o=>{if(o.isMesh){gs.add(o.geometry);ms.add(o.material)}});for(const g of gs)g.dispose();for(const m of ms)m.dispose();
