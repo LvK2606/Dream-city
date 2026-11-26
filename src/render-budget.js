@@ -9,5 +9,5 @@ export function subtractPass(total,reflection){
 }
 export function summarizeFrames(frames){
  const max=(key)=>Math.max(0,...frames.map(x=>x[key]??0));
- return {samples:frames.length,reflectionSamples:frames.filter(x=>x.reflectionCalls>0).length,mainCalls:max('mainCalls'),reflectionCalls:max('reflectionCalls'),totalCalls:max('calls'),mainTriangles:max('mainTriangles'),reflectionTriangles:max('reflectionTriangles'),totalTriangles:max('triangles')};
+ return {samples:frames.length,reflectionSamples:frames.filter(x=>x.reflectionCalls>0).length,mainCalls:max('mainCalls'),reflectionCalls:max('reflectionCalls'),shadowCalls:max('shadowCalls'),shadowSamples:frames.filter(x=>x.shadowCalls>0).length,totalCalls:max('calls'),mainTriangles:max('mainTriangles'),reflectionTriangles:max('reflectionTriangles'),shadowTriangles:max('shadowTriangles'),totalTriangles:max('triangles')};
 }

@@ -23,6 +23,9 @@ jobs:
           npm run preview > /tmp/dream-city.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://localhost:4173/ && break; sleep 1; done
           EXPECT_BUILD_SHA="$GITHUB_SHA" node tests/browser.mjs
+      - name: Security gate (high or critical)
+        if: always()
+        run: npm audit --audit-level=high
       - name: Production browser QA (exact build SHA)
         if: github.ref == 'refs/heads/main'
         env:

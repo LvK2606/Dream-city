@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {rng} from './world.js';
+import {rng,groundHeight} from './world.js';
 // Original geometry; optional CC0 photographic leaf atlas. Screen-space LOD with hysteresis.
 export function treeLOD(distance,previous,quality){
  const [a,b]=quality==='high'?[55,135]:quality==='medium'?[38,95]:[23,58];
@@ -48,7 +48,7 @@ export function makeTreeGeometry(species,lod){
   const x=Math.cos(theta)*reach,z=Math.sin(theta)*reach;
   if(lod===0&&j%2===0){const root=[.05,height*.3+height*.16*t,0],tip=[x,y-.18,z];limb(root,tip,.055,.017,4);const bend=[x*.70,y-.40,z*.70];limb(bend,[x+Math.cos(theta+.8)*.42,y+.30,z+Math.sin(theta+.8)*.42],.024,.007,3);}
   for(let k=0;k<cards;k++){
-   const g=new T.PlaneGeometry(lod===3?radius*2.45:radius*(lod===2?1.65:1.10+rand()*.30),lod===3?height*.78:height*(lod===2?.49:.32+rand()*.10));
+   const g=new T.PlaneGeometry(lod===3?radius*2.45:radius*(lod===2?1.65:1.10+rand()*.30),lod===3?height*.78:height*(lod===2?.49:.32+rand()*.10),lod===0?2:1,1);if(lod===0){const p=g.attributes.position;for(let q=0;q<p.count;q++)p.setZ(q,Math.abs(p.getX(q))*.22);g.computeVertexNormals();}
    g.rotateZ(lod===3?0:(rand()-.5)*.48);g.rotateX(lod===3?(k===2?.95:0):(rand()-.5)*.64);g.rotateY(theta+k*Math.PI/cards);
    g.translate(x,y,z);leaf.push(g);
   }
@@ -111,6 +111,7 @@ export function createVegetation(scene,rows,bark){
  const regions=new Set(rows.map(r=>Math.floor(r.x/128)+':'+Math.floor(r.z/128)));
  const geometry=Array.from({length:3},(_,s)=>Array.from({length:4},(_,l)=>makeTreeGeometry(s,l)));
  const batches=[];let lastQuality='',lastHeight=0,lastFov=0,lastAspect=0,stats;
+ const understory=createUnderstory(scene,rows,mats[1]);
  for(let species=0;species<3;species++)for(let lod=0;lod<4;lod++){
   const geo=geometry[species][lod],capacity=plants.filter(p=>p.species===species).length,atlas=lod>=2?1:0;
   const wood=new T.InstancedMesh(geo.wood,bark,capacity),leaf=new T.InstancedMesh(geo.leaf,mats[atlas],capacity);
@@ -134,8 +135,36 @@ export function createVegetation(scene,rows,bark){
    const val=.88+r.c*.12;color.setRGB(val,val,val);b.leaf.setColorAt(index,color);visibleLevels[lod]++;triangles+=b.triangles;
   }
   for(const b of batches){if(b.count)activeBatches++;for(const m of [b.wood,b.leaf]){m.count=b.count;m.visible=b.count>0;if(b.count){m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;m.computeBoundingSphere()}}}
-  stats={near:counts[0],mid:counts[1],far:counts[2]+counts[3],levels:counts,visibleLevels,total:rows.length,rendered:rows.length-culled,culled,triangles,source:status.source,species:3,legacyCanopy:false,regions:regions.size,activeBatches,mainPassDrawUpperBound:activeBatches*2,neutralTint:true,strategy:'global-species-lod/mobile-frustum'};
+  const lower=understory.update(camera,quality);stats={understory:lower,near:counts[0],mid:counts[1],far:counts[2]+counts[3],levels:counts,visibleLevels,total:rows.length,rendered:rows.length-culled,culled,triangles,source:status.source,species:3,legacyCanopy:false,regions:regions.size,activeBatches,mainPassDrawUpperBound:activeBatches*2,neutralTint:true,strategy:'global-species-lod/mobile-frustum'};
   return true;
  }
  return {update,report:()=>({...stats,assets:{...status}})};
+}
+
+ // Original undergrowth: local seeded shrub clusters and grass tufts, two instanced draws.
+function createUnderstory(scene,rows,leafMat){
+ const rand=rng(81273),positions=[];
+ for(const r of rows){if(Math.abs(r.x)<24||(Math.abs(r.x)<160&&Math.abs(r.z)<123)||rand()>.48)continue;
+  for(let i=0;i<2;i++){const x=r.x+(rand()-.5)*3.8,z=r.z+(rand()-.5)*3.8;
+   if(Math.abs(x)<24||(Math.abs(x)<160&&Math.abs(z)<123))continue;
+   positions.push({x,z,y:Math.max(0,groundHeight(x,z)),s:.55+rand()*.7,a:rand()*Math.PI*2,c:rand()});
+  }}
+ const cards=[];for(let i=0;i<3;i++){const g=new T.PlaneGeometry(1.6,.9);g.rotateY(i*Math.PI/3);g.translate(0,.45,0);cards.push(g)}
+ const shrubGeo=mergeGeometries(cards,false);cards.forEach(g=>g.dispose());
+ const p=[],indices=[];for(let i=0;i<5;i++){const a=i*2.399963,r=.12+i*.035,x=Math.cos(a)*r,z=Math.sin(a)*r,j=p.length/3;
+  p.push(x-.035,0,z,x+.035,0,z,x+.10*Math.cos(a),.35+i*.035,z+.14*Math.sin(a));indices.push(j,j+1,j+2)}
+ const grassGeo=new T.BufferGeometry();grassGeo.setAttribute('position',new T.Float32BufferAttribute(p,3));grassGeo.setIndex(indices);grassGeo.computeVertexNormals();
+ const grassMat=new T.MeshStandardMaterial({color:0x718d43,roughness:.95,side:T.DoubleSide});
+ const shrubs=new T.InstancedMesh(shrubGeo,leafMat,positions.length),grass=new T.InstancedMesh(grassGeo,grassMat,positions.length);
+ for(const m of [shrubs,grass]){m.count=0;m.visible=false;m.receiveShadow=true;m.castShadow=false;m.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(m)}
+ const dummy=new T.Object3D(),c=new T.Color();
+ function update(camera,quality){let a=0,b=0;const radius=quality==='low'?45:quality==='high'?105:78;
+  for(const r of positions){if(Math.hypot(camera.position.x-r.x,camera.position.y-r.y,camera.position.z-r.z)>radius)continue;
+   dummy.position.set(r.x,r.y,r.z);dummy.rotation.set(0,r.a,0);dummy.scale.setScalar(r.s);dummy.updateMatrix();
+   const m=r.c<.55?shrubs:grass,i=r.c<.55?a++:b++;m.setMatrixAt(i,dummy.matrix);c.setScalar(.83+r.c*.17);m.setColorAt(i,c);
+  }
+  for(const [m,n] of [[shrubs,a],[grass,b]]){m.count=n;m.visible=n>0;if(n){m.instanceMatrix.needsUpdate=true;m.instanceColor.needsUpdate=true;m.computeBoundingSphere()}}
+  return {population:positions.length,shrubs:a,grass:b,drawUpperBound:Number(a>0)+Number(b>0),triangles:a*6+b*5};
+ }
+ return {update};
 }

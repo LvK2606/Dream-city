@@ -29,3 +29,7 @@ test('reflection cache distinguishes motion, idle, invalidation and low mode',()
 import {simplifyPanel} from '../src/mesh-optimization.js';
 import {PlaneGeometry} from 'three';
 test('meshoptimizer reduces indexed geometry and retains UVs under error budget',async()=>{const g=new PlaneGeometry(10,10,16,16),old=g.index.count,uv=g.attributes.uv;const s=await simplifyPanel(g);assert.ok(s.applied);assert.ok(g.index.count<old);assert.equal(g.attributes.uv,uv);assert.ok(s.error<=.008);g.dispose()});
+
+import {buildShadowProxies} from '../src/shadow-batching.js';
+import {Scene,Mesh,BoxGeometry,MeshBasicMaterial} from 'three';
+test('shadow-only batching keeps identical static triangle count and hides proxies from main pass',()=>{const s=new Scene(),meshes=[];for(let i=0;i<8;i++){const g=new BoxGeometry(2,3,4);g.translate(i*3,0,0);const m=new Mesh(g,new MeshBasicMaterial());m.castShadow=true;s.add(m);meshes.push(m)}const a=buildShadowProxies(s,meshes);assert.equal(a.sourceTriangles,96);assert.equal(a.triangles,96);assert.equal(a.proxyMeshes,1);assert.ok(meshes.every(m=>!m.castShadow));assert.ok(a.proxies.every(m=>m.castShadow&&!m.visible))});
