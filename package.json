@@ -1,11 +1,11 @@
 {
   "name": "dream-city",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "node scripts/fetch-assets.mjs && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/world.test.js"
   },
