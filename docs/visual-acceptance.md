@@ -51,3 +51,6 @@ Require existing 24 captures and nine budgets, actual mipmapped foliage atlases 
 
 ## v0.4.10.7
 Require six source-versus-rendered near proxy masks (minimum IoU .40, average .55, area ratio .65–1.55), actual source-depth voxel patches <=1536 triangles, four additional close views of same submitted LOD0, 30 captures total; existing performance/codec/validation/A-B gates unchanged. Source fidelity thresholds are technical criteria, not Cities: Skylines II parity scores.
+
+## v0.4.10.8
+Require exact source alpha near, same six prior silhouette thresholds plus four independent holdout views with same thresholds, 30 successful captures with fresh rendered frame/SHA, all earlier budgets and A/B. No claim visual or GPU acceptance on CI alone.

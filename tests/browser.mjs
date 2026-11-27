@@ -3,13 +3,18 @@ import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {trafficTransition,interactionResult} from './interaction-checks.mjs';
 const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
-const out=process.env.QA_DIR||'qa',reports=[],failures=[],interactions=[],lodSweep=[],depthAB=[],closeViews=[];mkdirSync(out,{recursive:true});
+const out=process.env.QA_DIR||'qa',reports=[],failures=[],interactions=[],lodSweep=[],depthAB=[],closeViews=[],captures=[];mkdirSync(out,{recursive:true});
+async function capture(page,options){
+ const info=await page.evaluate(()=>window.__DREAM_QA__.freezeCapture(true));
+ try{await page.screenshot({...options,timeout:90000});captures.push({file:options.path.split('/').at(-1),...info});}
+ finally{await page.evaluate(()=>window.__DREAM_QA__.freezeCapture(false))}
+}
 const cases=[['aerial','day'],['street','day'],['river','sunset'],['aerial','night']];
 const check=(ok,msg)=>{if(!ok)failures.push(msg)};
 function validate(s,name,cam,light,high){
  const k=name+'/'+cam+'/'+light+(high?'/high':''),v=s.vegetation,p=s.passes.window;
  const ck=(ok,msg)=>check(ok,k+' '+msg);
- ck(s.version==='0.4.10.7','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
+ ck(s.version==='0.4.10.8','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
  ck(s.architecture.variants>=16&&s.architecture.volumes>s.buildings&&s.architecture.buildings===s.buildings,'architecture massing');
  ck(s.streets.markings>100&&s.streets.furniture===6&&s.streets.signals>20&&s.streets.lanes>30&&s.cars===100,'street detail and traffic');
  ck(s.landscape.parks===4&&s.landscape.paths===12&&s.landscape.rocks>=40&&s.landscape.triangles<=2240&&s.landscape.drawUpperBound===1,'landscape kit');
@@ -19,7 +24,7 @@ function validate(s,name,cam,light,high){
  ck(v.total===s.trees&&v.near+v.mid+v.far===s.trees&&v.levels.length===4&&v.levels.reduce((a,b)=>a+b,0)===s.trees,'LOD accounting');
  ck(v.rendered+v.culled===s.trees&&v.visibleLevels.reduce((a,b)=>a+b,0)===v.rendered&&v.mainPassDrawUpperBound<=24&&v.triangles<s.trees*100&&v.regions>8&&v.neutralTint&&!v.legacyCanopy,'vegetation budget');
  ck(v.pipeline.ready&&v.pipeline.loaded&&v.pipeline.species.length===3&&v.pipeline.cameraFacing&&v.pipeline.depthReprojection&&!v.pipeline.depthEnabled&&v.pipeline.defaultColorTaps===4&&v.pipeline.species.every(p=>p.views===32&&p.coverage.length===32&&p.coverage.every(c=>c>.008&&c<.94)&&p.enhancedCoverage.length===32&&p.enhancedCoverage.every(c=>c>.008&&c<.99)&&p.filteredMipmaps&&p.sourceTriangles>p.nearTriangles&&p.nearTriangles<=1600&&p.farTriangles===2&&p.midFarTriangles===10&&p.midTriangles===14&&p.volumeCards&&p.sharedFarAtlas&&p.nearSource===p.source&&p.depthCoverage.length===32&&p.depthCoverage.every(c=>c>.008&&c<.94)&&p.depthRanges.length===32&&p.depthRanges.every(([a,b])=>b-a>=3)&&p.depthAtlasBytes===2048*1024&&p.atlas[0]===2048&&p.atlas[1]===1024),'real EZ-Tree prototypes and 32-view directional atlas');
- ck(v.pipeline.fullModel.loaded&&v.pipeline.fullModel.validation?.uncompressed.errors===0&&v.pipeline.fullModel.validation?.compressed.errors===0&&v.pipeline.fullModel.validation?.decodedTriangles===v.pipeline.fullModel.afterTriangles&&v.pipeline.fullModel.afterTriangles<=350000&&v.pipeline.fullModel.bytes<=20*1024*1024&&v.pipeline.species[0].source==='polyhaven-full-model'&&v.pipeline.species[0].reliefSamples>0&&v.pipeline.species[0].reliefVertices>=v.pipeline.species[0].reliefSamples&&v.pipeline.species[0].nearMethod==='source-depth-patches'&&v.pipeline.species[0].nearTriangles===2*v.pipeline.species[0].reliefSamples&&v.pipeline.species[0].nearTriangles<=1536&&v.pipeline.species[0].patchVoxels>20&&v.pipeline.species[0].patchDepthSamples>100&&v.pipeline.species[0].silhouette.length===6&&v.pipeline.species[0].silhouette.every(s=>s.iou>=.4&&s.areaRatio>=.65&&s.areaRatio<=1.55)&&v.pipeline.species[0].silhouette.reduce((n,s)=>n+s.iou,0)/6>=.55,'optimized full external tree actually baked');
+ ck(v.pipeline.fullModel.loaded&&v.pipeline.fullModel.validation?.uncompressed.errors===0&&v.pipeline.fullModel.validation?.compressed.errors===0&&v.pipeline.fullModel.validation?.decodedTriangles===v.pipeline.fullModel.afterTriangles&&v.pipeline.fullModel.afterTriangles<=350000&&v.pipeline.fullModel.bytes<=20*1024*1024&&v.pipeline.species[0].source==='polyhaven-full-model'&&v.pipeline.species[0].reliefSamples>0&&v.pipeline.species[0].reliefVertices>=v.pipeline.species[0].reliefSamples&&v.pipeline.species[0].nearMethod==='source-depth-patches'&&v.pipeline.species[0].nearTriangles===2*v.pipeline.species[0].reliefSamples&&v.pipeline.species[0].nearTriangles<=1536&&v.pipeline.species[0].patchVoxels>20&&v.pipeline.species[0].patchDepthSamples>100&&v.pipeline.species[0].silhouette.length===6&&v.pipeline.species[0].silhouette.every(s=>s.iou>=.4&&s.areaRatio>=.65&&s.areaRatio<=1.55)&&v.pipeline.species[0].silhouette.reduce((n,s)=>n+s.iou,0)/6>=.55&&v.pipeline.species[0].sourceMask&&v.pipeline.species[0].sourceAlphaPixels>0&&v.pipeline.species[0].silhouettePass&&v.pipeline.species[0].holdoutPass&&v.pipeline.species[0].holdout.length===4&&v.pipeline.species[0].holdout.every(s=>s.iou>=.4&&s.areaRatio>=.65&&s.areaRatio<=1.55)&&v.pipeline.species[0].holdout.reduce((n,s)=>n+s.iou,0)/4>=.55,'optimized full external tree actually baked');
  ck(s.photoAssets.ktx2?.loaded&&s.photoAssets.ktx2.manifest.ready&&s.photoAssets.ktx2.manifest.bytes<=10000000&&Object.keys(s.photoAssets.ktx2.maps).length===15&&Object.entries(s.photoAssets.ktx2.maps).every(([id,p])=>p.loaded&&p.width===1024&&p.height===1024&&p.mipmaps===11&&p.colorSpace===(id.endsWith('/diff')?'srgb':'linear')&&s.photoAssets.ktx2.manifest.maps[id].encoder===('basisu@1.16.3/'+(id.endsWith('/nor_gl')?'UASTC':'ETC1S'))),'15 real KTX2 PBR maps decoded and applied');
  ck(v.understory.population>100&&v.understory.drawUpperBound<=2&&v.understory.triangles<=5000,'undergrowth budget');
  if(process.env.REQUIRE_PHOTO_ASSETS==='1')ck(v.assets.loaded&&v.assets.coverage>.04&&v.assets.coverage<.96&&s.photoAssets.loaded.length===6,'photo assets');
@@ -79,12 +84,12 @@ async function interactionQA(page,name,viewport,out,check){
    verify(bounds.width>0&&bounds.height>0&&bounds.left>=0&&bounds.top>=0&&bounds.right<=bounds.viewport[0]+1&&bounds.bottom<=bounds.viewport[1]+1&&bounds.width<=bounds.viewport[0]*.48&&bounds.scrollWidth<=bounds.clientWidth+1,'landscape bounded scrollable panel');
    await page.locator('#pause').scrollIntoViewIfNeeded();verify(await page.locator('#pause').isVisible(),'landscape controls accessible');
   }
-  await page.screenshot({path:out+'/'+name+'-interaction-resize.png'});
+  await capture(page,{path:out+'/'+name+'-interaction-resize.png'});
   if(name==='mobile'){await toggle.click();verify(!(await page.locator('#panel').isVisible()),'landscape panel closes again');}
   return interactionResult(name,checks,evidence);
  }catch(e){
   const error=String(e);verify(false,'interaction exception: '+error);
-  try{await page.screenshot({path:out+'/'+name+'-interaction-error.png'})}catch{}
+  try{await capture(page,{path:out+'/'+name+'-interaction-error.png'})}catch{}
   return interactionResult(name,checks,evidence,error);
  }
 }
@@ -103,9 +108,9 @@ try{
      await page.evaluate(([c,l,q])=>{const a=window.__DREAM_QA__;a.setQuality(q);a.setCamera(c);a.setLight(l);a.resetFrameTiming()},[cam,light,high?'high':name==='mobile'?'low':'medium']);
      await page.waitForFunction(()=>{const s=window.__DREAM_QA__.report();return s.passes.window.samples>=5&&s.frameTiming.samples>=5},{},{timeout:120000});
      const shot=await page.evaluate(()=>window.__DREAM_QA__.report());
-     reports.push({name,cam,light,...shot});await page.screenshot({path:out+'/'+file+'.png'});await page.evaluate(()=>{window.__DREAM_QA__.setClean(true);document.body.classList.add('qa-clean')});try{await page.screenshot({path:out+'/'+file+'-clean.png'})}finally{await page.evaluate(()=>{document.body.classList.remove('qa-clean');window.__DREAM_QA__.setClean(false)})}validate(shot,name,cam,light,high);
+     reports.push({name,cam,light,...shot});await capture(page,{path:out+'/'+file+'.png'});await page.evaluate(()=>{window.__DREAM_QA__.setClean(true);document.body.classList.add('qa-clean')});try{await capture(page,{path:out+'/'+file+'-clean.png'})}finally{await page.evaluate(()=>{document.body.classList.remove('qa-clean');window.__DREAM_QA__.setClean(false)})}validate(shot,name,cam,light,high);
      console.log(file,JSON.stringify(shot));
-    }catch(e){failures.push(file+': '+String(e));try{await page.screenshot({path:out+'/'+file+'-error.png'})}catch{}}
+    }catch(e){failures.push(file+': '+String(e));try{await capture(page,{path:out+'/'+file+'-error.png'})}catch{}}
    }
    if(name==='desktop'){
     try{
@@ -116,7 +121,7 @@ try{
       const sample=await page.evaluate(()=>({tree:window.__DREAM_QA__.qaTree(),frame:window.__DREAM_QA__.report().frames}));
       lodSweep.push({expected:lod,...info,...sample});
       check(sample.tree?.index===info.index&&sample.tree.lod===lod,'tree sweep expected LOD '+lod+' got '+sample.tree?.lod);
-      await page.screenshot({path:out+'/desktop-tree-lod-'+lod+'.png'});
+      await capture(page,{path:out+'/desktop-tree-lod-'+lod+'.png'});
      }
     }catch(e){failures.push('tree LOD sweep '+String(e))}
     finally{await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setClean(false);document.body.classList.remove('qa-clean');a.setCamera('street');a.setLight('day')})}
@@ -132,7 +137,7 @@ try{
       const report=await page.evaluate(()=>window.__DREAM_QA__.report());
       check(report.vegetation.pipeline.depthEnabled===enabled,'depth AB actual mode');
       depthAB.push({enabled,sha:report.buildSha,frame:report.frames,position:report.motion.position,frameTiming:report.frameTiming,passes:report.passes.window});
-      if(depthAB.length<=2)await page.screenshot({path:out+'/desktop-depth-'+(enabled?'on':'off')+'.png'});
+      if(depthAB.length<=2)await capture(page,{path:out+'/desktop-depth-'+(enabled?'on':'off')+'.png'});
      }
      check(depthAB.every(r=>r.position.every((x,i)=>Math.abs(x-depthAB[0].position[i])<.01)),'depth AB fixed camera');
     }catch(e){failures.push('depth AB '+String(e))}
@@ -146,7 +151,7 @@ try{
       await page.waitForFunction(n=>window.__DREAM_QA__.report().frames>=n+2,info.frame,{timeout:120000});
       const sample=await page.evaluate(()=>({tree:window.__DREAM_QA__.qaTree(),frame:window.__DREAM_QA__.report().frames,sha:window.__DREAM_QA__.report().buildSha}));
       closeViews.push({...info,...sample});check(sample.tree?.index===info.index&&sample.tree.lod===0,'close source tree LOD0 angle '+i);
-      await page.screenshot({path:out+'/desktop-tree-close-'+i+'.png'});
+      await capture(page,{path:out+'/desktop-tree-close-'+i+'.png'});
      }
     }catch(e){failures.push('tree close views '+String(e))}
     finally{await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setClean(false);document.body.classList.remove('qa-clean');a.setCamera('street');a.setLight('day')})}
@@ -155,6 +160,6 @@ try{
   }catch(e){failures.push(name+' initialization: '+String(e))}
   finally{if(errors.length)failures.push(name+' console errors: '+errors.join('; '));await page.close()}
  }
- check(closeViews.length===4,'expected four close views');check(depthAB.length===3,'expected A/B/A depth timings');check(lodSweep.length===4,'expected four exact-source LOD captures');check(reports.length===9,'expected 9 reports, got '+reports.length);check(interactions.length===2,'expected 2 interaction reports');check(interactions.every(x=>x.passed),'interaction reports must all pass');
-}finally{writeFileSync(out+'/reports.json',JSON.stringify(reports,null,2));writeFileSync(out+'/budget-failures.json',JSON.stringify(failures,null,2));writeFileSync(out+'/interactions.json',JSON.stringify(interactions,null,2));writeFileSync(out+'/lod-sweep.json',JSON.stringify(lodSweep,null,2));writeFileSync(out+'/depth-ab.json',JSON.stringify(depthAB,null,2));writeFileSync(out+'/close-views.json',JSON.stringify(closeViews,null,2));await browser.close()}
+ check(captures.filter(c=>!c.file.endsWith('-error.png')).length===30,'expected 30 successful captures');check(captures.every(c=>Number.isInteger(c.frame)&&c.frame>0&&(!process.env.EXPECT_BUILD_SHA||c.sha===process.env.EXPECT_BUILD_SHA)),'capture exact frame and SHA');check(closeViews.length===4,'expected four close views');check(depthAB.length===3,'expected A/B/A depth timings');check(lodSweep.length===4,'expected four exact-source LOD captures');check(reports.length===9,'expected 9 reports, got '+reports.length);check(interactions.length===2,'expected 2 interaction reports');check(interactions.every(x=>x.passed),'interaction reports must all pass');
+}finally{writeFileSync(out+'/reports.json',JSON.stringify(reports,null,2));writeFileSync(out+'/budget-failures.json',JSON.stringify(failures,null,2));writeFileSync(out+'/interactions.json',JSON.stringify(interactions,null,2));writeFileSync(out+'/lod-sweep.json',JSON.stringify(lodSweep,null,2));writeFileSync(out+'/depth-ab.json',JSON.stringify(depthAB,null,2));writeFileSync(out+'/close-views.json',JSON.stringify(closeViews,null,2));writeFileSync(out+'/capture-frames.json',JSON.stringify(captures,null,2));await browser.close()}
 assert.deepEqual(failures,[],'QA failures: '+failures.join('; '));

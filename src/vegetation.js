@@ -2,7 +2,7 @@ import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {rng,groundHeight} from './world.js';
 import {createPrototype} from './tree-prototypes.js';
-import {bakeDirectional,directionalMaterial,proceduralBakeObject,volumeCards,volumeMaterial,sourcePatches,compareSourceSilhouette} from './directional-impostor.js';
+import {bakeDirectional,directionalMaterial,proceduralBakeObject,volumeCards,volumeMaterial,calibratedSourcePatches,silhouettePass} from './directional-impostor.js';
 import {loadFullTree} from './full-tree.js';
 // Original geometry; optional CC0 photographic leaf atlas. Screen-space LOD with hysteresis.
 export function treeLOD(distance,previous,quality){
@@ -131,21 +131,21 @@ export function createVegetation(scene,rows,bark,renderer){
     try{
      source=s===0&&full?full:proceduralBakeObject(p,tex);
      const b=bakeDirectional(renderer,source.object,source.box);
-     const relief=s===0&&full?sourcePatches(b):null;if(relief)relief.silhouette=compareSourceSilhouette(renderer,b,relief.geometry);pending.push({p,b,relief,source:s===0&&full?'polyhaven-full-model':'ez-tree'});
+     const relief=s===0&&full?calibratedSourcePatches(renderer,b):null;pending.push({p,b,relief,source:s===0&&full?'polyhaven-full-model':'ez-tree'});
     }catch(e){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf])g.dispose();throw e}
     finally{if(source&&source!==full)source.dispose()}
    }
    for(const {p,b,source,relief} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
     const far=batches[species*4+3],midFar=batches[species*4+2],mid=batches[species*4+1],material=volumeMaterial(b);
-    if(relief){near.wood.geometry.dispose();near.leaf.geometry.dispose();near.leaf.geometry=relief.geometry;near.leaf.material=material;near.leaf.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:b.texture,alphaTest:.28,side:T.DoubleSide});near.baked=true;near.triangles=relief.geometry.index.count/3;}
+    if(relief){near.wood.geometry.dispose();near.leaf.geometry.dispose();near.leaf.geometry=relief.geometry;const patchMaterial=volumeMaterial({...b,texture:relief.texture});patchMaterial.alphaTest=.5;patchMaterial.side=relief.frontOnly?T.FrontSide:T.DoubleSide;near.leaf.material=patchMaterial;near.leaf.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:relief.texture,alphaTest:.5,side:patchMaterial.side});near.baked=true;near.triangles=relief.geometry.index.count/3;}
     for(const batch of [mid,midFar,far]){
      const geo=batch===far?b.geometry:volumeCards(b,batch===mid);
      batch.leaf.geometry.dispose();batch.leaf.geometry=geo;batch.leaf.material=batch===far?directionalMaterial(b,depthMode):material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=geo.index.count/3;
     }
-    pipeline.species.push({species,source,sourceTriangles:relief?full.report.renderedTriangles:p.detail,nearTriangles:near.triangles,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:source,reliefSamples:relief?.sampled??0,reliefVertices:relief?.total??0,nearMethod:relief?'source-depth-patches':'ez-tree-mesh',patchVoxels:relief?.voxels??0,patchDepthSamples:relief?.depthSamples??0,silhouette:relief?.silhouette??[],views:b.views,coverage:b.coverage,enhancedCoverage:b.enhancedCoverage,filteredMipmaps:b.texture.generateMipmaps,depthCoverage:b.depthCoverage,depthRanges:b.depthRanges,depthAtlasBytes:b.depthBytes.length,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
+    pipeline.species.push({species,source,sourceTriangles:relief?full.report.renderedTriangles:p.detail,nearTriangles:near.triangles,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:source,reliefSamples:relief?.sampled??0,reliefVertices:relief?.total??0,nearMethod:relief?'source-depth-patches':'ez-tree-mesh',patchVoxels:relief?.voxels??0,patchDepthSamples:relief?.depthSamples??0,silhouette:relief?.silhouette??[],holdout:relief?.holdout??[],sourceAlphaPixels:relief?.covered??0,patchScale:relief?.scale??0,patchFrontOnly:relief?.frontOnly??false,patchTrials:relief?.trials??[],sourceMask:!!relief,silhouettePass:relief?silhouettePass(relief.silhouette):false,holdoutPass:relief?silhouettePass(relief.holdout):false,views:b.views,coverage:b.coverage,enhancedCoverage:b.enhancedCoverage,filteredMipmaps:b.texture.generateMipmaps,depthCoverage:b.depthCoverage,depthRanges:b.depthRanges,depthAtlasBytes:b.depthBytes.length,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
    }
    Object.assign(pipeline,{ready:true,loaded:true});
-  }catch(e){for(const {p,b,relief} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry,relief?.geometry])g?.dispose();b.texture.dispose();b.depthTexture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}
+  }catch(e){for(const {p,b,relief} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry,relief?.geometry])g?.dispose();b.texture.dispose();b.depthTexture.dispose();relief?.texture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}
   finally{full?.dispose()}
  }
  function update(camera,quality,viewportHeight){

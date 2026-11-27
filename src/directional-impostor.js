@@ -108,7 +108,8 @@ export function reliefCards(bake){
  return {geometry,sampled,total};
 }
 // Disconnected, source-depth patches avoid stretching a continuous plane over empty canopy.
-export function sourcePatches(bake){
+export function sourcePatches(bake,patchScale=1){
+ if(!Number.isFinite(patchScale)||patchScale<.7||patchScale>1)throw Error('invalid patch scale');
  const [width,height]=bake.atlas,inside=TILE-2*GUTTER,grid=12,maxPatches=768,candidates=[];
  if(!bake.depthBytes||bake.depthBytes.length!==width*height)throw Error('missing source depth');
  const views=Array.from({length:8},(_,a)=>({a,e:1})).concat([{a:0,e:2},{a:2,e:2},{a:4,e:2},{a:6,e:2},{a:0,e:3}]);
@@ -142,7 +143,7 @@ export function sourcePatches(bake){
  if(selected.length<24)throw Error('insufficient source patches '+selected.length);
  const pos=[],uv=[],idx=[],normal=[];
  for(const p of selected){
-  const i=pos.length/3,half=bake.extent/grid;
+  const i=pos.length/3,half=bake.extent/grid*patchScale;
   for(const [x,y,u,v] of [[-1,-1,p.u0,p.v0],[1,-1,p.u1,p.v0],[1,1,p.u1,p.v1],[-1,1,p.u0,p.v1]]){
    const vtx=p.center.clone().addScaledVector(p.right,x*half).addScaledVector(p.up,y*half);
    pos.push(...vtx.toArray());normal.push(...p.normal.toArray());
@@ -154,14 +155,14 @@ export function sourcePatches(bake){
  return {geometry,sampled:selected.length,total:candidates.length,voxels:voxels.size,depthSamples:selected.reduce((n,p)=>n+p.samples,0)};
 }
 // Actual source alpha mask vs actual proxy rendered alpha at matched orthographic views.
-export function compareSourceSilhouette(renderer,bake,geometry){
- const inside=TILE-2*GUTTER,[width]=bake.atlas,target=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false}),scene=new T.Scene(),material=new T.MeshBasicMaterial({map:bake.texture,alphaTest:.28,side:T.DoubleSide,toneMapped:false});
+export function compareSourceSilhouette(renderer,bake,geometry,texture=bake.texture,side=T.DoubleSide,alphaTest=.28,views=[[0,1],[2,1],[4,1],[6,1],[1,2],[3,3]]){
+ const inside=TILE-2*GUTTER,[width]=bake.atlas,target=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false}),scene=new T.Scene(),material=new T.MeshBasicMaterial({map:texture,alphaTest,side,toneMapped:false});
  scene.add(new T.Mesh(geometry,material));
  const camera=new T.OrthographicCamera(-bake.extent,bake.extent,bake.extent,-bake.extent,20-bake.depthRange,20+bake.depthRange),center=new T.Vector3(...bake.center),results=[];
  const prev=renderer.getRenderTarget(),clear=renderer.getClearColor(new T.Color()),alpha=renderer.getClearAlpha(),auto=renderer.autoClear,shadow=renderer.shadowMap.enabled,xr=renderer.xr.enabled;
  try{
   renderer.xr.enabled=false;renderer.shadowMap.enabled=false;renderer.autoClear=true;renderer.setClearColor(0,0);renderer.setRenderTarget(target);
-  for(const [a,e] of [[0,1],[2,1],[4,1],[6,1],[1,2],[3,3]]){
+  for(const [a,e] of views){
    const yaw=a*2*Math.PI/AZIMUTHS,pitch=ELEVATIONS[e]*Math.PI/180;
    camera.position.copy(center).addScaledVector(new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)),20);camera.lookAt(center);camera.updateMatrixWorld();
    renderer.clear();renderer.render(scene,camera);
@@ -176,6 +177,52 @@ export function compareSourceSilhouette(renderer,bake,geometry){
   }
  }finally{renderer.setRenderTarget(prev);renderer.setClearColor(clear,alpha);renderer.autoClear=auto;renderer.shadowMap.enabled=shadow;renderer.xr.enabled=xr;target.dispose();material.dispose()}
  return results;
+}
+// Reconstruct the original binary alpha mask from the matched depth pass.
+ // Far-tree dilation is deliberately excluded from near proxy material.
+export function restoreSourceAlpha(rgba,depth,width,height){
+ if(rgba.length!==width*height*4||depth.length!==width*height)throw Error('source alpha dimensions');
+ let count=0;
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const covered=depth[(height-1-y)*width+x]>0;
+  rgba[(y*width+x)*4+3]=covered?255:0;count+=Number(covered);
+ }
+ return count;
+}
+export function sourceMaskTexture(bake){
+ const [w,h]=bake.atlas,canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+ const ctx=canvas.getContext('2d');ctx.drawImage(bake.texture.image,0,0);
+ const pixels=ctx.getImageData(0,0,w,h),covered=restoreSourceAlpha(pixels.data,bake.depthBytes,w,h);
+ if(!covered)throw Error('empty source alpha');
+ ctx.putImageData(pixels,0,0);
+ const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+ texture.minFilter=T.LinearFilter;texture.magFilter=T.LinearFilter;texture.generateMipmaps=false;
+ return {texture,covered};
+}
+export function silhouettePass(results){
+ return results.length>0&&results.every(s=>s.iou>=.4&&s.areaRatio>=.65&&s.areaRatio<=1.55)&&results.reduce((n,s)=>n+s.iou,0)/results.length>=.55;
+}
+// Small deterministic bounded candidate set. Render and measure each candidate;
+// never change acceptance limits to fit output. Independent diagonal views are
+// evaluated only after selection and cannot influence the selected profile.
+export function calibratedSourcePatches(renderer,bake){
+ const {texture,covered}=sourceMaskTexture(bake),trials=[];
+ let best=null,score=-Infinity;
+ try{
+  for(const [scale,frontOnly] of [[1,false],[.9,false],[.8,false],[1,true]]){
+   const candidate=sourcePatches(bake,scale),side=frontOnly?T.FrontSide:T.DoubleSide;
+   candidate.silhouette=compareSourceSilhouette(renderer,bake,candidate.geometry,texture,side,.5);
+   const pass=silhouettePass(candidate.silhouette),mean=candidate.silhouette.reduce((n,s)=>n+s.iou,0)/6;
+   const violation=candidate.silhouette.reduce((n,s)=>n+Math.max(0,s.areaRatio-1.55,.65-s.areaRatio)+Math.max(0,.4-s.iou),0);
+   const rank=(pass?10:0)+mean-violation;
+   trials.push({scale,frontOnly,mean,pass,views:candidate.silhouette});
+   if(rank>score){best?.geometry.dispose();best={...candidate,scale,frontOnly};score=rank}else candidate.geometry.dispose();
+   if(pass)break;
+  }
+  if(!best)throw Error('missing source patch candidate');
+  best.holdout=compareSourceSilhouette(renderer,bake,best.geometry,texture,best.frontOnly?T.FrontSide:T.DoubleSide,.5,[[1,1],[3,1],[5,1],[7,1]]);
+  return {...best,texture,covered,trials};
+ }catch(e){best?.geometry.dispose();texture.dispose();throw e}
 }
 export function volumeMaterial(bake){
  const m=new T.MeshStandardMaterial({map:bake.texture,color:0xffffff,alphaTest:.28,side:T.DoubleSide,roughness:.92});

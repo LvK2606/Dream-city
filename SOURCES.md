@@ -62,3 +62,6 @@ Original shader filtering, bounded mip sampling and QA mode A/B; existing source
 
 ## v0.4.10.7
 Source-derived patch geometry, silhouette pixel QA and mip cell clamp are original. Poly Haven tree_small_02 CC0 page tags Geometry Nodes; photogrammetry unverified. No new external assets.
+
+## v0.4.10.8
+Original depth-derived mask and bounded proxy calibration; no new assets or dependencies.
