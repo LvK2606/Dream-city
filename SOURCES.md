@@ -53,3 +53,6 @@ Original bounded coverage filter and shared LOD2/3 atlas; existing Poly Haven CC
 
 ## v0.4.10.4
 Khronos glTF Validator 2.0.0-dev.3.10 (Apache-2.0), https://github.com/KhronosGroup/glTF-Validator; original volumetric baked cards, Basis ETC1S/UASTC channel policy. No new proprietary assets.
+
+## v0.4.10.5
+Original depth-assisted reprojection and relief proxy. Verified Three.js r180 MeshDepthMaterial BasicDepthPacking shader (1-fragCoordZ), https://github.com/mrdoob/three.js/blob/r180/src/renderers/shaders/ShaderLib/depth.glsl.js (MIT); uses existing engine API, no new dependencies or copied shader.

@@ -42,3 +42,6 @@ Require 15 actual decoded KTX2 PBR maps, 32 views per species, 2048x1024 atlas, 
 
 ## v0.4.10.4
 Require volumetric baked LOD1/2 (14/10 triangles) and 2-triangle directional LOD3; real 15 decoded PBR maps, mixed codecs, aggregate <=10 MB; Khronos validator zero errors before and after compression, decoded triangle count parity. Preserve 9 budgets and captures. Review riverbank and hillside foliage, not just counts.
+
+## v0.4.10.5
+Require actual depth coverage/range in 96 rendered views, same source ID all four LODs, 1280-triangle external relief proxy, four exact-tree sweep captures with submitted LOD and same index. Previous 9 budgets, 20 original captures, 15 KTX2 and glTF gates remain. Compare appearance, depth warping, coverage and LOD changes; do not treat software render as physical GPU or direct deployment QA.

@@ -81,3 +81,6 @@ test('impostor coverage expansion is limited to one texel and preserves original
 
 import {volumeCards} from '../src/directional-impostor.js';
 test('hybrid foliage uses baked view cells and actual intersecting geometry',()=>{for(const extra of [false,true]){const g=volumeCards({extent:3,center:[0,2,0]},extra);assert.equal(g.index.count/3,extra?14:10);const p=g.attributes.position,uv=g.attributes.uv;let z=0;for(let i=0;i<p.count;i++){z=Math.max(z,Math.abs(p.getZ(i)));assert.ok(uv.getX(i)>0&&uv.getX(i)<1&&uv.getY(i)>0&&uv.getY(i)<1)}assert.ok(z>2);assert.ok(g.boundingSphere.radius>3);g.dispose()}});
+
+import {reliefCards} from '../src/directional-impostor.js';
+test('source-depth relief proxy has bounded triangles and actual displaced positions',()=>{const data=new Uint8Array(2048*1024);data.fill(190);const b={extent:3,center:[0,2,0],atlas:[2048,1024],depthBytes:data,depthRange:3.45};const r=reliefCards(b);assert.equal(r.geometry.index.count/3,1280);assert.equal(r.sampled,r.total);assert.ok(r.geometry.attributes.position.array.every(Number.isFinite));r.geometry.dispose();assert.throws(()=>reliefCards({...b,depthBytes:new Uint8Array(1)}),/missing relief depth/)});
