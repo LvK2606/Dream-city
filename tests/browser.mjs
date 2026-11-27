@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {trafficTransition,interactionResult} from './interaction-checks.mjs';
 const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
-const out=process.env.QA_DIR||'qa',reports=[],failures=[],interactions=[],lodSweep=[],depthAB=[],closeViews=[],captures=[];mkdirSync(out,{recursive:true});
+const out=process.env.QA_DIR||'qa',reports=[],failures=[],interactions=[],lodSweep=[],depthAB=[],closeViews=[],captures=[],octAB=[];mkdirSync(out,{recursive:true});
 async function capture(page,options){
  const info=await page.evaluate(()=>window.__DREAM_QA__.freezeCapture(true));
  try{await page.screenshot({...options,timeout:90000});captures.push({file:options.path.split('/').at(-1),...info});}
@@ -14,7 +14,7 @@ const check=(ok,msg)=>{if(!ok)failures.push(msg)};
 function validate(s,name,cam,light,high){
  const k=name+'/'+cam+'/'+light+(high?'/high':''),v=s.vegetation,p=s.passes.window;
  const ck=(ok,msg)=>check(ok,k+' '+msg);
- ck(s.version==='0.4.10.8','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
+ ck(s.version==='0.4.10.9','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
  ck(s.architecture.variants>=16&&s.architecture.volumes>s.buildings&&s.architecture.buildings===s.buildings,'architecture massing');
  ck(s.streets.markings>100&&s.streets.furniture===6&&s.streets.signals>20&&s.streets.lanes>30&&s.cars===100,'street detail and traffic');
  ck(s.landscape.parks===4&&s.landscape.paths===12&&s.landscape.rocks>=40&&s.landscape.triangles<=2240&&s.landscape.drawUpperBound===1,'landscape kit');
@@ -23,7 +23,7 @@ function validate(s,name,cam,light,high){
  ck(s.ready&&s.buildings>150&&s.trees>500,'population');ck(s.facadeQuads===s.facadeWindows&&s.facadeWindows>3000&&s.facadeStyles>=12&&s.chunks>20,'facades');
  ck(v.total===s.trees&&v.near+v.mid+v.far===s.trees&&v.levels.length===4&&v.levels.reduce((a,b)=>a+b,0)===s.trees,'LOD accounting');
  ck(v.rendered+v.culled===s.trees&&v.visibleLevels.reduce((a,b)=>a+b,0)===v.rendered&&v.mainPassDrawUpperBound<=24&&v.triangles<s.trees*100&&v.regions>8&&v.neutralTint&&!v.legacyCanopy,'vegetation budget');
- ck(v.pipeline.ready&&v.pipeline.loaded&&v.pipeline.species.length===3&&v.pipeline.cameraFacing&&v.pipeline.depthReprojection&&!v.pipeline.depthEnabled&&v.pipeline.defaultColorTaps===4&&v.pipeline.species.every(p=>p.views===32&&p.coverage.length===32&&p.coverage.every(c=>c>.008&&c<.94)&&p.enhancedCoverage.length===32&&p.enhancedCoverage.every(c=>c>.008&&c<.99)&&p.filteredMipmaps&&p.sourceTriangles>p.nearTriangles&&p.nearTriangles<=1600&&p.farTriangles===2&&p.midFarTriangles===10&&p.midTriangles===14&&p.volumeCards&&p.sharedFarAtlas&&p.nearSource===p.source&&p.depthCoverage.length===32&&p.depthCoverage.every(c=>c>.008&&c<.94)&&p.depthRanges.length===32&&p.depthRanges.every(([a,b])=>b-a>=3)&&p.depthAtlasBytes===2048*1024&&p.atlas[0]===2048&&p.atlas[1]===1024),'real EZ-Tree prototypes and 32-view directional atlas');
+ ck(v.pipeline.ready&&v.pipeline.loaded&&v.pipeline.species.length===3&&v.pipeline.cameraFacing&&v.pipeline.depthReprojection&&!v.pipeline.depthEnabled&&v.pipeline.octEnabled&&v.pipeline.defaultColorTaps===3&&v.pipeline.legacyColorTaps===4&&v.pipeline.species.every(p=>p.octahedral?.views===49&&p.octahedral.grid===6&&p.octahedral.slot===128&&p.octahedral.atlas[0]===1024&&p.octahedral.atlas[1]===1024&&p.octahedral.bytes===4194304&&p.octahedral.filtered&&p.octahedral.coverage.length===49&&p.octahedral.coverage.every(c=>c>.008&&c<.94)&&p.views===32&&p.coverage.length===32&&p.coverage.every(c=>c>.008&&c<.94)&&p.enhancedCoverage.length===32&&p.enhancedCoverage.every(c=>c>.008&&c<.99)&&p.filteredMipmaps&&p.sourceTriangles>p.nearTriangles&&p.nearTriangles<=1600&&p.farTriangles===2&&p.midFarTriangles===10&&p.midTriangles===14&&p.volumeCards&&p.sharedFarAtlas&&p.nearSource===p.source&&p.depthCoverage.length===32&&p.depthCoverage.every(c=>c>.008&&c<.94)&&p.depthRanges.length===32&&p.depthRanges.every(([a,b])=>b-a>=3)&&p.depthAtlasBytes===2048*1024&&p.atlas[0]===2048&&p.atlas[1]===1024),'real EZ-Tree prototypes and 32-view directional atlas');
  ck(v.pipeline.fullModel.loaded&&v.pipeline.fullModel.validation?.uncompressed.errors===0&&v.pipeline.fullModel.validation?.compressed.errors===0&&v.pipeline.fullModel.validation?.decodedTriangles===v.pipeline.fullModel.afterTriangles&&v.pipeline.fullModel.afterTriangles<=350000&&v.pipeline.fullModel.bytes<=20*1024*1024&&v.pipeline.species[0].source==='polyhaven-full-model'&&v.pipeline.species[0].reliefSamples>0&&v.pipeline.species[0].reliefVertices>=v.pipeline.species[0].reliefSamples&&v.pipeline.species[0].nearMethod==='source-depth-patches'&&v.pipeline.species[0].nearTriangles===2*v.pipeline.species[0].reliefSamples&&v.pipeline.species[0].nearTriangles<=1536&&v.pipeline.species[0].patchVoxels>20&&v.pipeline.species[0].patchDepthSamples>100&&v.pipeline.species[0].silhouette.length===6&&v.pipeline.species[0].silhouette.every(s=>s.iou>=.4&&s.areaRatio>=.65&&s.areaRatio<=1.55)&&v.pipeline.species[0].silhouette.reduce((n,s)=>n+s.iou,0)/6>=.55&&v.pipeline.species[0].sourceMask&&v.pipeline.species[0].sourceAlphaPixels>0&&v.pipeline.species[0].silhouettePass&&v.pipeline.species[0].holdoutPass&&v.pipeline.species[0].holdout.length===4&&v.pipeline.species[0].holdout.every(s=>s.iou>=.4&&s.areaRatio>=.65&&s.areaRatio<=1.55)&&v.pipeline.species[0].holdout.reduce((n,s)=>n+s.iou,0)/4>=.55,'optimized full external tree actually baked');
  ck(s.photoAssets.ktx2?.loaded&&s.photoAssets.ktx2.manifest.ready&&s.photoAssets.ktx2.manifest.bytes<=10000000&&Object.keys(s.photoAssets.ktx2.maps).length===15&&Object.entries(s.photoAssets.ktx2.maps).every(([id,p])=>p.loaded&&p.width===1024&&p.height===1024&&p.mipmaps===11&&p.colorSpace===(id.endsWith('/diff')?'srgb':'linear')&&s.photoAssets.ktx2.manifest.maps[id].encoder===('basisu@1.16.3/'+(id.endsWith('/nor_gl')?'UASTC':'ETC1S'))),'15 real KTX2 PBR maps decoded and applied');
  ck(v.understory.population>100&&v.understory.drawUpperBound<=2&&v.understory.triangles<=5000,'undergrowth budget');
@@ -130,18 +130,18 @@ try{
     try{
      await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setQuality('medium');a.setCamera('street');a.setLight('day');a.setClean(true);document.body.classList.add('qa-clean')});
      for(const enabled of [false,true,false]){
-      const frame=await page.evaluate(e=>{const a=window.__DREAM_QA__;a.setDepthMode(e);return a.report().frames},enabled);
+      const frame=await page.evaluate(e=>{const a=window.__DREAM_QA__;a.setOctMode(false);a.setDepthMode(e);return a.report().frames},enabled);
       await page.waitForFunction(n=>window.__DREAM_QA__.report().frames>=n+2,frame,{timeout:120000});
       await page.evaluate(()=>window.__DREAM_QA__.resetFrameTiming());
       await page.waitForFunction(()=>window.__DREAM_QA__.report().frameTiming.samples>=3,{},{timeout:120000});
       const report=await page.evaluate(()=>window.__DREAM_QA__.report());
-      check(report.vegetation.pipeline.depthEnabled===enabled,'depth AB actual mode');
+      check(report.vegetation.pipeline.depthEnabled===enabled&&!report.vegetation.pipeline.octEnabled,'depth AB actual mode');
       depthAB.push({enabled,sha:report.buildSha,frame:report.frames,position:report.motion.position,frameTiming:report.frameTiming,passes:report.passes.window});
       if(depthAB.length<=2)await capture(page,{path:out+'/desktop-depth-'+(enabled?'on':'off')+'.png'});
      }
      check(depthAB.every(r=>r.position.every((x,i)=>Math.abs(x-depthAB[0].position[i])<.01)),'depth AB fixed camera');
     }catch(e){failures.push('depth AB '+String(e))}
-    finally{await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setDepthMode(false);a.setClean(false);document.body.classList.remove('qa-clean')})}
+    finally{await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setDepthMode(false);a.setOctMode(true);a.setClean(false);document.body.classList.remove('qa-clean')})}
    }
    if(name==='desktop'){
     try{
@@ -156,10 +156,27 @@ try{
     }catch(e){failures.push('tree close views '+String(e))}
     finally{await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setClean(false);document.body.classList.remove('qa-clean');a.setCamera('street');a.setLight('day')})}
    }
+   if(name==='desktop'){
+    try{
+     await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setQuality('medium');a.setCamera('aerial');a.setLight('day');a.setClean(true);document.body.classList.add('qa-clean');a.setDepthMode(false)});
+     for(const enabled of [false,true,false]){
+      const frame=await page.evaluate(e=>{const a=window.__DREAM_QA__;a.setOctMode(e);return a.report().frames},enabled);
+      await page.waitForFunction(n=>window.__DREAM_QA__.report().frames>=n+2,frame,{timeout:120000});
+      await page.evaluate(()=>window.__DREAM_QA__.resetFrameTiming());
+      await page.waitForFunction(()=>window.__DREAM_QA__.report().frameTiming.samples>=3,{},{timeout:120000});
+      const report=await page.evaluate(()=>window.__DREAM_QA__.report());
+      check(report.vegetation.pipeline.octEnabled===enabled&&!report.vegetation.pipeline.depthEnabled&&report.vegetation.visibleLevels[3]>0,'oct AB actual mode and far population');
+      octAB.push({enabled,sha:report.buildSha,frame:report.frames,position:report.motion.position,far:report.vegetation.visibleLevels[3],frameTiming:report.frameTiming,passes:report.passes.window});
+      if(octAB.length<=2)await capture(page,{path:out+'/desktop-oct-'+(enabled?'on':'off')+'.png'});
+     }
+     check(octAB.every(r=>r.position.every((x,i)=>Math.abs(x-octAB[0].position[i])<.01)),'oct AB fixed camera');
+    }catch(e){failures.push('oct AB '+String(e))}
+    finally{await page.evaluate(()=>{const a=window.__DREAM_QA__;a.setOctMode(true);a.setClean(false);document.body.classList.remove('qa-clean');a.setCamera('street')})}
+   }
    try{interactions.push(await interactionQA(page,name,viewport,out,check))}catch(e){failures.push(name+' interaction: '+String(e))}
   }catch(e){failures.push(name+' initialization: '+String(e))}
   finally{if(errors.length)failures.push(name+' console errors: '+errors.join('; '));await page.close()}
  }
- check(captures.filter(c=>!c.file.endsWith('-error.png')).length===30,'expected 30 successful captures');check(captures.every(c=>Number.isInteger(c.frame)&&c.frame>0&&(!process.env.EXPECT_BUILD_SHA||c.sha===process.env.EXPECT_BUILD_SHA)),'capture exact frame and SHA');check(closeViews.length===4,'expected four close views');check(depthAB.length===3,'expected A/B/A depth timings');check(lodSweep.length===4,'expected four exact-source LOD captures');check(reports.length===9,'expected 9 reports, got '+reports.length);check(interactions.length===2,'expected 2 interaction reports');check(interactions.every(x=>x.passed),'interaction reports must all pass');
-}finally{writeFileSync(out+'/reports.json',JSON.stringify(reports,null,2));writeFileSync(out+'/budget-failures.json',JSON.stringify(failures,null,2));writeFileSync(out+'/interactions.json',JSON.stringify(interactions,null,2));writeFileSync(out+'/lod-sweep.json',JSON.stringify(lodSweep,null,2));writeFileSync(out+'/depth-ab.json',JSON.stringify(depthAB,null,2));writeFileSync(out+'/close-views.json',JSON.stringify(closeViews,null,2));writeFileSync(out+'/capture-frames.json',JSON.stringify(captures,null,2));await browser.close()}
+ check(captures.filter(c=>!c.file.endsWith('-error.png')).length===32,'expected 32 successful captures');check(captures.every(c=>Number.isInteger(c.frame)&&c.frame>0&&(!process.env.EXPECT_BUILD_SHA||c.sha===process.env.EXPECT_BUILD_SHA)),'capture exact frame and SHA');check(octAB.length===3,'expected oct A/B/A timings');check(closeViews.length===4,'expected four close views');check(depthAB.length===3,'expected A/B/A depth timings');check(lodSweep.length===4,'expected four exact-source LOD captures');check(reports.length===9,'expected 9 reports, got '+reports.length);check(interactions.length===2,'expected 2 interaction reports');check(interactions.every(x=>x.passed),'interaction reports must all pass');
+}finally{writeFileSync(out+'/reports.json',JSON.stringify(reports,null,2));writeFileSync(out+'/budget-failures.json',JSON.stringify(failures,null,2));writeFileSync(out+'/interactions.json',JSON.stringify(interactions,null,2));writeFileSync(out+'/lod-sweep.json',JSON.stringify(lodSweep,null,2));writeFileSync(out+'/depth-ab.json',JSON.stringify(depthAB,null,2));writeFileSync(out+'/close-views.json',JSON.stringify(closeViews,null,2));writeFileSync(out+'/capture-frames.json',JSON.stringify(captures,null,2));writeFileSync(out+'/oct-ab.json',JSON.stringify(octAB,null,2));await browser.close()}
 assert.deepEqual(failures,[],'QA failures: '+failures.join('; '));

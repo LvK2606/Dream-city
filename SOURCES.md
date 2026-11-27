@@ -65,3 +65,6 @@ Source-derived patch geometry, silhouette pixel QA and mip cell clamp are origin
 
 ## v0.4.10.8
 Original depth-derived mask and bounded proxy calibration; no new assets or dependencies.
+
+## v0.4.10.9
+Technique reference: Anderson Mancini, ektogamat/octahedral-impostor-component, MIT, https://github.com/ektogamat/octahedral-impostor-component/tree/f94290693e0966dbb2e2dba89591734753a4582f. Original WebGL2 adaptation, no copied upstream component. See docs/OPEN_SOURCE_STAGE2.md for investigation and source decisions.

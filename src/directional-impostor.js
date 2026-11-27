@@ -229,11 +229,11 @@ export function volumeMaterial(bake){
  m.onBeforeCompile=s=>{s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.08;')};
  m.customProgramCacheKey=()=> 'tree-volume-atlas-v1';return m;
 }
-export function directionalMaterial(bake,depthMode={value:0}){
+export function directionalMaterial(bake,depthMode={value:0},octMode={value:1},oct=null){
  const mat=new T.MeshStandardMaterial({map:bake.texture,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.95});
  mat.onBeforeCompile=s=>{
-  s.uniforms.dreamCenter={value:new T.Vector3(...bake.center)};s.uniforms.dreamDepth={value:bake.depthTexture};s.uniforms.dreamDepthScale={value:bake.depthRange/bake.extent};s.uniforms.dreamDepthEnabled=depthMode;
-  s.vertexShader='uniform vec3 dreamCenter; varying vec2 dreamAngles;\n'+s.vertexShader;
+  s.uniforms.dreamCenter={value:new T.Vector3(...bake.center)};s.uniforms.dreamDepth={value:bake.depthTexture};s.uniforms.dreamDepthScale={value:bake.depthRange/bake.extent};s.uniforms.dreamDepthEnabled=depthMode;s.uniforms.dreamOct={value:oct?.texture??bake.texture};s.uniforms.dreamOctEnabled=octMode;
+  s.vertexShader='uniform vec3 dreamCenter; varying vec2 dreamAngles; varying vec2 dreamOctUV;\n'+s.vertexShader;
   s.vertexShader=s.vertexShader.replace('#include <project_vertex>',`
    vec4 centerWorld=modelMatrix*instanceMatrix*vec4(dreamCenter,1.0);
    vec3 dir=normalize(cameraPosition-centerWorld.xyz);
@@ -241,6 +241,7 @@ export function directionalMaterial(bake,depthMode={value:0}){
    vec3 axisZ=normalize((modelMatrix*instanceMatrix*vec4(0.,0.,1.,0.)).xyz);
    float yaw=atan(dot(dir,axisX),dot(dir,axisZ));
    dreamAngles=vec2(yaw,asin(clamp(dir.y,-1.,1.)));
+   vec3 localDir=vec3(dot(dir,axisX),max(0.,dir.y),dot(dir,axisZ));localDir/=max(.0001,abs(localDir.x)+localDir.y+abs(localDir.z));dreamOctUV=vec2(localDir.x+localDir.z,-localDir.x+localDir.z)*.5+.5;
    vec3 right=cross(vec3(0.,1.,0.),dir);
    if(dot(right,right)<0.000001)right=axisX;else right=normalize(right);
    vec3 up=normalize(cross(dir,right));
@@ -255,6 +256,10 @@ export function directionalMaterial(bake,depthMode={value:0}){
   uniform sampler2D dreamDepth;
   uniform float dreamDepthScale;
   uniform float dreamDepthEnabled;
+  uniform sampler2D dreamOct;
+  uniform float dreamOctEnabled;
+  varying vec2 dreamOctUV;
+  vec4 octTap(vec2 cell,vec2 uv,float mip){float pad=max(4.,exp2(mip)*.5+1.);vec2 p=clamp(4.+uv*120.,vec2(pad),vec2(128.-pad));return textureLod(dreamOct,(cell*128.+p)/1024.,mip);}
   vec3 treeDir(float yaw,float pitch){return vec3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch));}
   vec3 treeRight(float yaw){return vec3(cos(yaw),0.,-sin(yaw));}
   vec2 treeCell(vec2 uv,float a,float e){return (vec2(a,e)+vec2(2./256.)+clamp(uv,0.,1.)*(252./256.))/vec2(8.,4.);}
@@ -278,6 +283,21 @@ export function directionalMaterial(bake,depthMode={value:0}){
   }
   `+s.fragmentShader;
   s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>',`
+   vec4 texel,strongest;float coverage;
+   float footprint=max(length(dFdx(vMapUv)),length(dFdy(vMapUv)));
+   if(dreamOctEnabled>.5&&dreamDepthEnabled<.5&&dreamAngles.y>=0.&&dreamAngles.y<1.48){
+    vec2 grid=clamp(dreamOctUV*6.,0.,6.),cell=min(floor(grid),vec2(5.)),p=grid-cell;
+    vec2 c0,c1,c2;vec3 w;
+    if(p.x+p.y<=1.){c0=cell;c1=cell+vec2(1.,0.);c2=cell+vec2(0.,1.);w=vec3(1.-p.x-p.y,p.x,p.y);}
+    else{c0=cell+1.;c1=cell+vec2(0.,1.);c2=cell+vec2(1.,0.);w=vec3(p.x+p.y-1.,1.-p.x,1.-p.y);}
+    float mip=clamp(log2(max(footprint*120.,1.)),0.,3.);
+    vec4 a=octTap(c0,vMapUv,mip),b=octTap(c1,vMapUv,mip),c=octTap(c2,vMapUv,mip);a.rgb*=a.a;b.rgb*=b.a;c.rgb*=c.a;
+    texel=a*w.x+b*w.y+c*w.z;
+    // Only contributing frames can boost the coverage, ensuring continuity on triangle edges.
+    vec3 contribution=clamp(w*3.,0.,1.);vec3 alphas=vec3(a.a,b.a,c.a)*contribution;
+    coverage=clamp(max(texel.a,.86*max(alphas.x,max(alphas.y,alphas.z)))*mix(1.,1.4,mip/3.),0.,1.);
+    strongest=a*w.x;if(b.a*w.y>strongest.a)strongest=b*w.y;if(c.a*w.z>strongest.a)strongest=c*w.z;
+   }else{
    float av=mod(dreamAngles.x/6.28318530718*8.0+8.0,8.0);
    float a0=floor(av),a1=mod(a0+1.0,8.0),aw=fract(av);
    float elev=degrees(dreamAngles.y);
@@ -285,8 +305,7 @@ export function directionalMaterial(bake,depthMode={value:0}){
    if(elev>=0.0){e0=1.0;ew=clamp(elev/35.0,0.0,1.0);}
    if(elev>=35.0){e0=2.0;ew=clamp((elev-35.0)/35.0,0.0,1.0);}
    // Default path uses four filtered color taps. Bound mip level to avoid mixing atlas cells.
-   float footprint=max(length(dFdx(vMapUv)),length(dFdy(vMapUv)))*252.;
-   float mip=clamp(log2(max(footprint,1.)),0.,4.);
+   float mip=clamp(log2(max(footprint*252.,1.)),0.,4.);
    vec4 t0=textureLod(map,treeFilteredCell(vMapUv,a0,e0,mip),mip);
    vec4 t1=textureLod(map,treeFilteredCell(vMapUv,a1,e0,mip),mip);
    vec4 t2=textureLod(map,treeFilteredCell(vMapUv,a0,e0+1.,mip),mip);
@@ -300,23 +319,25 @@ export function directionalMaterial(bake,depthMode={value:0}){
     if(u0.a>=t0.a*.5)t0=u0;if(u1.a>=t1.a*.5)t1=u1;if(u2.a>=t2.a*.5)t2=u2;if(u3.a>=t3.a*.5)t3=u3;
    }
    t0.rgb*=t0.a;t1.rgb*=t1.a;t2.rgb*=t2.a;t3.rgb*=t3.a;
-   vec4 texel=mix(mix(t0,t1,aw),mix(t2,t3,aw),ew);
+   texel=mix(mix(t0,t1,aw),mix(t2,t3,aw),ew);
    // Preserve expected silhouette coverage using ordered screen-space alpha testing.
    // Unlike a fixed cutoff, a single contributing view can retain thin foliage.
-   float coverage=clamp(max(texel.a,0.78*max(max(t0.a,t1.a),max(t2.a,t3.a)))*mix(1.,1.45,mip/4.),0.0,1.0);
+   coverage=clamp(max(texel.a,0.78*max(max(t0.a,t1.a),max(t2.a,t3.a)))*mix(1.,1.45,mip/4.),0.0,1.0);
+   strongest=t0;if(t1.a>strongest.a)strongest=t1;if(t2.a>strongest.a)strongest=t2;if(t3.a>strongest.a)strongest=t3;
+   }
    vec2 pixel=mod(floor(gl_FragCoord.xy),4.0);
    float x0=mod(pixel.x,2.0),y0=mod(pixel.y,2.0);
    float x1=floor(pixel.x/2.0),y1=floor(pixel.y/2.0);
    float threshold=(4.0*(2.0*mod(x0+y0,2.0)+y0)+2.0*mod(x1+y1,2.0)+y1+0.5)/16.0;
    if(coverage<=threshold)discard;
    // If blended view has no visible sample, keep color from the strongest neighbor.
-   vec4 strongest=t0;if(t1.a>strongest.a)strongest=t1;if(t2.a>strongest.a)strongest=t2;if(t3.a>strongest.a)strongest=t3;
+   
    vec3 rgb=texel.a>0.02?texel.rgb/max(texel.a,0.00001):strongest.rgb/max(strongest.a,0.00001);
    diffuseColor*=vec4(rgb,1.0);
   `);
   s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;');
  };
- mat.customProgramCacheKey=()=> 'directional-tree-filtered-ab-v7';return mat;
+ mat.customProgramCacheKey=()=> 'directional-tree-octahedral-v9';return mat;
 }
 export function proceduralBakeObject(p,photo){
  const o=new T.Group(),wood=new T.MeshBasicMaterial({color:0x786b52,toneMapped:false}),leaf=new T.MeshBasicMaterial({map:photo,alphaTest:.35,side:T.DoubleSide,toneMapped:false});

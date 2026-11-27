@@ -4,6 +4,7 @@ import {rng,groundHeight} from './world.js';
 import {createPrototype} from './tree-prototypes.js';
 import {bakeDirectional,directionalMaterial,proceduralBakeObject,volumeCards,volumeMaterial,calibratedSourcePatches,silhouettePass} from './directional-impostor.js';
 import {loadFullTree} from './full-tree.js';
+import {bakeHemiOctahedral} from './octahedral-foliage.js';
 // Original geometry; optional CC0 photographic leaf atlas. Screen-space LOD with hysteresis.
 export function treeLOD(distance,previous,quality){
  const [a,b]=quality==='high'?[55,135]:quality==='medium'?[38,95]:[23,58];
@@ -100,12 +101,12 @@ function silhouette(tex){
  const out=new T.CanvasTexture(c);out.colorSpace=T.SRGBColorSpace;out.anisotropy=4;return out;
 }
 export function createVegetation(scene,rows,bark,renderer){
- let tex=leafTexture(),farTex=silhouette(tex);const depthMode={value:0};
+ let tex=leafTexture(),farTex=silhouette(tex);const depthMode={value:0},octMode={value:1};
  const mats=[tex,farTex].map(map=>new T.MeshStandardMaterial({map,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.86}));
  // A subtle two-sided diffuse lift, not emission; neutral instance tint avoids multiplying green twice.
  for(const m of mats){m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;')};m.customProgramCacheKey=()=> 'foliage-soft-diffuse-v1'}
  const depths=[tex,farTex].map(map=>new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map,alphaTest:.35,side:T.DoubleSide}));
- const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'hybrid-depth-relief-directional',cameraFacing:true,depthReprojection:true,fullModel:{loaded:false}};
+ const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'hybrid-source-patch-octahedral',cameraFacing:true,depthReprojection:true,fullModel:{loaded:false}};
  const task=photoAtlas().then(async a=>{const old=tex,oldFar=farTex;tex=a.tex;farTex=silhouette(tex);for(let i=0;i<2;i++){mats[i].map=depths[i].map=i?farTex:tex;mats[i].needsUpdate=depths[i].needsUpdate=true}old.dispose();oldFar.dispose();Object.assign(status,{loaded:true,source:a.id,coverage:a.coverage,bytes:a.bytes});await installPrototypes();status.ready=true;lastQuality='';}).catch(e=>{Object.assign(status,{ready:true,loaded:false,error:String(e)});Object.assign(pipeline,{ready:true,loaded:false,error:String(e)})});
  // 3 species x 4 tiers x 2 materials: max 24 main-pass tree submissions.
  // InstancedMesh avoids relying on WEBGL_multi_draw support; mobile compacts visible instances.
@@ -130,22 +131,22 @@ export function createVegetation(scene,rows,bark,renderer){
     const p=await createPrototype(s);let source=null;
     try{
      source=s===0&&full?full:proceduralBakeObject(p,tex);
-     const b=bakeDirectional(renderer,source.object,source.box);
-     const relief=s===0&&full?calibratedSourcePatches(renderer,b):null;pending.push({p,b,relief,source:s===0&&full?'polyhaven-full-model':'ez-tree'});
+     const b=bakeDirectional(renderer,source.object,source.box),oct=bakeHemiOctahedral(renderer,source.object,source.box);
+     const relief=s===0&&full?calibratedSourcePatches(renderer,b):null;pending.push({p,b,oct,relief,source:s===0&&full?'polyhaven-full-model':'ez-tree'});
     }catch(e){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf])g.dispose();throw e}
     finally{if(source&&source!==full)source.dispose()}
    }
-   for(const {p,b,source,relief} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
+   for(const {p,b,oct,source,relief} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
     const far=batches[species*4+3],midFar=batches[species*4+2],mid=batches[species*4+1],material=volumeMaterial(b);
     if(relief){near.wood.geometry.dispose();near.leaf.geometry.dispose();near.leaf.geometry=relief.geometry;const patchMaterial=volumeMaterial({...b,texture:relief.texture});patchMaterial.alphaTest=.5;patchMaterial.side=relief.frontOnly?T.FrontSide:T.DoubleSide;near.leaf.material=patchMaterial;near.leaf.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:relief.texture,alphaTest:.5,side:patchMaterial.side});near.baked=true;near.triangles=relief.geometry.index.count/3;}
     for(const batch of [mid,midFar,far]){
      const geo=batch===far?b.geometry:volumeCards(b,batch===mid);
-     batch.leaf.geometry.dispose();batch.leaf.geometry=geo;batch.leaf.material=batch===far?directionalMaterial(b,depthMode):material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=geo.index.count/3;
+     batch.leaf.geometry.dispose();batch.leaf.geometry=geo;batch.leaf.material=batch===far?directionalMaterial(b,depthMode,octMode,oct):material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=geo.index.count/3;
     }
-    pipeline.species.push({species,source,sourceTriangles:relief?full.report.renderedTriangles:p.detail,nearTriangles:near.triangles,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:source,reliefSamples:relief?.sampled??0,reliefVertices:relief?.total??0,nearMethod:relief?'source-depth-patches':'ez-tree-mesh',patchVoxels:relief?.voxels??0,patchDepthSamples:relief?.depthSamples??0,silhouette:relief?.silhouette??[],holdout:relief?.holdout??[],sourceAlphaPixels:relief?.covered??0,patchScale:relief?.scale??0,patchFrontOnly:relief?.frontOnly??false,patchTrials:relief?.trials??[],sourceMask:!!relief,silhouettePass:relief?silhouettePass(relief.silhouette):false,holdoutPass:relief?silhouettePass(relief.holdout):false,views:b.views,coverage:b.coverage,enhancedCoverage:b.enhancedCoverage,filteredMipmaps:b.texture.generateMipmaps,depthCoverage:b.depthCoverage,depthRanges:b.depthRanges,depthAtlasBytes:b.depthBytes.length,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
+    pipeline.species.push({species,source,sourceTriangles:relief?full.report.renderedTriangles:p.detail,nearTriangles:near.triangles,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:source,reliefSamples:relief?.sampled??0,reliefVertices:relief?.total??0,nearMethod:relief?'source-depth-patches':'ez-tree-mesh',patchVoxels:relief?.voxels??0,patchDepthSamples:relief?.depthSamples??0,silhouette:relief?.silhouette??[],holdout:relief?.holdout??[],sourceAlphaPixels:relief?.covered??0,patchScale:relief?.scale??0,patchFrontOnly:relief?.frontOnly??false,patchTrials:relief?.trials??[],sourceMask:!!relief,silhouettePass:relief?silhouettePass(relief.silhouette):false,holdoutPass:relief?silhouettePass(relief.holdout):false,octahedral:{views:oct.views,grid:oct.grid,slot:oct.slot,atlas:oct.atlas,coverage:oct.coverage,bytes:oct.bytes,filtered:oct.texture.generateMipmaps},views:b.views,coverage:b.coverage,enhancedCoverage:b.enhancedCoverage,filteredMipmaps:b.texture.generateMipmaps,depthCoverage:b.depthCoverage,depthRanges:b.depthRanges,depthAtlasBytes:b.depthBytes.length,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
    }
    Object.assign(pipeline,{ready:true,loaded:true});
-  }catch(e){for(const {p,b,relief} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry,relief?.geometry])g?.dispose();b.texture.dispose();b.depthTexture.dispose();relief?.texture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}
+  }catch(e){for(const {p,b,oct,relief} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry,relief?.geometry])g?.dispose();b.texture.dispose();b.depthTexture.dispose();oct.texture.dispose();relief?.texture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}
   finally{full?.dispose()}
  }
  function update(camera,quality,viewportHeight){
@@ -167,7 +168,7 @@ export function createVegetation(scene,rows,bark,renderer){
   const lower=understory.update(camera,quality);stats={understory:lower,near:counts[0],mid:counts[1],far:counts[2]+counts[3],levels:counts,visibleLevels,total:rows.length,rendered:rows.length-culled,culled,triangles,source:status.source,species:3,legacyCanopy:false,regions:regions.size,activeBatches,mainPassDrawUpperBound:activeBatches*2,neutralTint:true,strategy:'global-species-lod/mobile-frustum'};
   return true;
  }
- return {update,setDepthMode:(enabled)=>{depthMode.value=enabled?1:0;return !!depthMode.value},qaTree:()=>{const candidates=plants.filter(p=>p.species===0&&p.r.x>165&&p.r.x<220&&Math.abs(p.r.z)<110);const score=p=>Math.min(...plants.filter(q=>q.i!==p.i).map(q=>Math.hypot(p.r.x-q.r.x,p.r.z-q.r.z)));const p=candidates.sort((a,b)=>score(b)-score(a))[0]??plants.find(p=>p.species===0);return p?{...p.r,index:p.i,species:p.species,lod:drawnLod[p.i]}:null},report:()=>({...stats,assets:{...status},pipeline:{...pipeline,depthEnabled:!!depthMode.value,defaultColorTaps:4,depthModeColorTaps:8,depthModeDepthTaps:4}})};
+ return {update,setOctMode:(enabled)=>{octMode.value=enabled?1:0;return !!octMode.value},setDepthMode:(enabled)=>{depthMode.value=enabled?1:0;return !!depthMode.value},qaTree:()=>{const candidates=plants.filter(p=>p.species===0&&p.r.x>165&&p.r.x<220&&Math.abs(p.r.z)<110);const score=p=>Math.min(...plants.filter(q=>q.i!==p.i).map(q=>Math.hypot(p.r.x-q.r.x,p.r.z-q.r.z)));const p=candidates.sort((a,b)=>score(b)-score(a))[0]??plants.find(p=>p.species===0);return p?{...p.r,index:p.i,species:p.species,lod:drawnLod[p.i]}:null},report:()=>({...stats,assets:{...status},pipeline:{...pipeline,depthEnabled:!!depthMode.value,octEnabled:!!octMode.value,defaultColorTaps:3,legacyColorTaps:4,depthModeColorTaps:8,depthModeDepthTaps:4}})};
 }
 
  // Original undergrowth: local seeded shrub clusters and grass tufts, two instanced draws.

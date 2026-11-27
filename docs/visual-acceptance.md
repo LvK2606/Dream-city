@@ -54,3 +54,6 @@ Require six source-versus-rendered near proxy masks (minimum IoU .40, average .5
 
 ## v0.4.10.8
 Require exact source alpha near, same six prior silhouette thresholds plus four independent holdout views with same thresholds, 30 successful captures with fresh rendered frame/SHA, all earlier budgets and A/B. No claim visual or GPU acceptance on CI alone.
+
+## v0.4.10.9
+Require 49 actual hemisphere views per species plus 32 prior depth views, default three-tap upper hemisphere path, separate fixed-camera oct A/B/A diagnostic, 32 exact-SHA captures, all previous budgets and independent silhouette checks retained. Inspect far canopy from desktop/mobile and no visible discontinuities before acceptance. Software render is not hardware GPU evidence.
