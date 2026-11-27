@@ -136,8 +136,10 @@ export function createVegetation(scene,rows,bark,renderer){
     finally{if(source&&source!==full)source.dispose()}
    }
    for(const {p,b,source} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
-    const far=batches[species*4+3];far.leaf.geometry.dispose();far.leaf.geometry=b.geometry;far.leaf.material=directionalMaterial(b);far.leaf.customDepthMaterial=null;far.leaf.receiveShadow=false;far.baked=true;far.triangles=b.geometry.index.count/3;
-    pipeline.species.push({species,source,sourceTriangles:p.detail,nearTriangles:p.reduced,farTriangles:far.triangles,views:b.views,coverage:b.coverage,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
+    const far=batches[species*4+3],midFar=batches[species*4+2],material=directionalMaterial(b);
+    for(const batch of [midFar,far]){batch.leaf.geometry.dispose();batch.leaf.geometry=batch===far?b.geometry:b.geometry.clone();batch.leaf.material=material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=batch.leaf.geometry.index.count/3;}
+    
+    pipeline.species.push({species,source,sourceTriangles:p.detail,nearTriangles:p.reduced,farTriangles:far.triangles,midFarTriangles:midFar.triangles,sharedFarAtlas:true,views:b.views,coverage:b.coverage,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
    }
    Object.assign(pipeline,{ready:true,loaded:true});
   }catch(e){for(const {p,b} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry])g.dispose();b.texture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}

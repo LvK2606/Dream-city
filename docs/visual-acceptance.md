@@ -36,3 +36,6 @@ Require 3 actual EZ-Tree prototype pairs and 3 orthographic alpha-bearing source
 
 ## v0.4.10.2
 Require actual 32-view directional atlas for three species, external full tree source loaded and baked, KTX2 grass diffuse actually decoded, 9 previous budgets, 20 captures, existing interaction checks and audit. Inspect camera transitions and foliage quality; no claim of full octahedral depth or scanned tree provenance.
+
+## v0.4.10.3
+Require 15 actual decoded KTX2 PBR maps, 32 views per species, 2048x1024 atlas, shared LOD2/3 directional assets. Retain prior nine render budgets, interaction and captures; inspect foliage appearance, aliasing, PBR orientation/color, and measure GPU/device before final approval.

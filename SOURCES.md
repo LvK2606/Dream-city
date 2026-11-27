@@ -47,3 +47,6 @@ EZ-Tree exact v1.1.0 release commit 89083a033a354856acae05f8856bf37c6ebcfa9b ins
 
 ## v0.4.10.2
 Poly Haven tree_small_02 by Rico Cilliers (CC0; full photoreal authored asset, scan provenance unverified), https://polyhaven.com/a/tree_small_02. glTF-Transform 4.2.1 MIT and Meshoptimizer 0.24.0 MIT. Basis Universal 1.16.3 encoder via HacksawStudios/basisu npm wrapper (ISC; upstream Apache-2.0). Original WebGL2 directional atlas shader, inspired by documented octahedral atlas techniques in Ctrlmonster/three-octahedral-impostor and ektogamat/octahedral-impostor-component; no external shader copied. Source hashes and generated manifests; no proprietary assets.
+
+## v0.4.10.3
+Original bounded coverage filter and shared LOD2/3 atlas; existing Poly Haven CC0 material maps encoded with existing Basis Universal wrapper, linear normals/roughness. No additional third-party source.

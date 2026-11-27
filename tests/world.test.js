@@ -75,3 +75,6 @@ test('released EZ-Tree double-leaf topology reduction preserves indexed pairs an
 
 import {directionCell,AZIMUTHS,ELEVATIONS} from '../src/directional-impostor.js';
 test('directional atlas wraps yaw and brackets elevation',()=>{const a=directionCell(-.01,17.5);assert.equal(a.a0,7);assert.equal(a.a1,0);assert.ok(a.aw>.9);assert.equal(a.e0,1);assert.equal(a.ew,.5);assert.equal(directionCell(0,-90).ew,0);assert.equal(directionCell(0,89).ew,1);assert.equal(AZIMUTHS*ELEVATIONS.length,32)});
+
+import {enhanceCoverage,TILE} from '../src/directional-impostor.js';
+test('impostor coverage expansion is limited to one texel and preserves original covered samples',()=>{const p=new Uint8ClampedArray(7*7*4),i=(3*7+3)*4;p.set([20,80,30,255],i);enhanceCoverage(p,7,7);assert.deepEqual(Array.from(p.slice(i,i+4)),[20,80,30,255]);assert.deepEqual(Array.from(p.slice(i+4,i+8)),[20,80,30,140]);assert.equal(p[i+11],0);assert.equal(p[i+7*4+7],0);assert.equal(TILE,256)});

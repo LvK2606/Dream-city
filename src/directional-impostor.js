@@ -1,12 +1,26 @@
 import * as T from 'three';
 // Original WebGL2 azimuth/elevation atlas. No upstream shader copied.
 // 8 azimuths x 4 elevations, one quad per instance; reflection uses its actual render camera.
-export const AZIMUTHS=8,ELEVATIONS=[-30,0,35,70],TILE=128,GUTTER=2;
+export const AZIMUTHS=8,ELEVATIONS=[-30,0,35,70],TILE=256,GUTTER=2;
 export function directionCell(yaw,elevation){
  const a=((yaw/(2*Math.PI)*AZIMUTHS)%AZIMUTHS+AZIMUTHS)%AZIMUTHS;
  let lo=0;while(lo<ELEVATIONS.length-2&&elevation>ELEVATIONS[lo+1])lo++;
  const w=Math.max(0,Math.min(1,(elevation-ELEVATIONS[lo])/(ELEVATIONS[lo+1]-ELEVATIONS[lo])));
  return {a0:Math.floor(a),a1:(Math.floor(a)+1)%AZIMUTHS,aw:a-Math.floor(a),e0:lo,e1:lo+1,ew:w};
+}
+// Original CPU alpha coverage filter; expands only from a neighboring covered sample.
+// One texel at 256px, limited opacity, no filling of large gaps.
+export function enhanceCoverage(bytes,w,h){
+ const original=new Uint8ClampedArray(bytes);
+ for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+  const i=(y*w+x)*4;if(original[i+3]>=128)continue;
+  let best=i;
+  for(const off of [-w*4,-4,4,w*4])if(original[i+off+3]>original[best+3])best=i+off;
+  if(best===i||original[best+3]<128)continue;
+  const a=Math.round(original[best+3]*.55);if(a<=original[i+3])continue;
+  for(let c=0;c<3;c++)bytes[i+c]=original[best+c];bytes[i+3]=a;
+ }
+ return bytes;
 }
 export function bakeDirectional(renderer,object,box){
  const size=box.getSize(new T.Vector3()),center=box.getCenter(new T.Vector3()),extent=size.length()*.5*1.06;
@@ -26,6 +40,8 @@ export function bakeDirectional(renderer,object,box){
    for(let y=0;y<inside;y++){const start=(inside-y-1)*inside*4;im.data.set(bytes.subarray(start,start+inside*4),y*inside*4)}
    for(let j=3;j<im.data.length;j+=4)if(im.data[j]>100)count++;
    const c=count/(inside*inside);if(c<.008||c>.94)throw Error('invalid directional coverage '+c+' at '+a+'/'+e);coverage.push(c);
+   // Fill one-pixel alpha gaps only inside this view. Preserve the original color of the selected adjacent leaf.
+   enhanceCoverage(im.data,inside,inside);
    ctx.putImageData(im,a*tile+GUTTER,(ELEVATIONS.length-1-e)*tile+GUTTER);
   }
  }finally{renderer.setRenderTarget(prev);renderer.setClearColor(clear,alpha);renderer.autoClear=auto;renderer.shadowMap.enabled=shadow;renderer.xr.enabled=xr;target.dispose();scene.remove(object)}
@@ -62,7 +78,7 @@ export function directionalMaterial(bake){
    float e0=0.0,ew=clamp((elev+30.0)/30.0,0.0,1.0);
    if(elev>=0.0){e0=1.0;ew=clamp(elev/35.0,0.0,1.0);}
    if(elev>=35.0){e0=2.0;ew=clamp((elev-35.0)/35.0,0.0,1.0);}
-   vec2 cell=vec2(8.0,4.0),uv=vec2(2.0/128.0)+vMapUv*(124.0/128.0);
+   vec2 cell=vec2(8.0,4.0),uv=vec2(2.0/256.0)+vMapUv*(252.0/256.0);
    vec4 t0=texture2D(map,(vec2(a0,e0)+uv)/cell);
    vec4 t1=texture2D(map,(vec2(a1,e0)+uv)/cell);
    vec4 t2=texture2D(map,(vec2(a0,e0+1.0)+uv)/cell);
@@ -71,17 +87,20 @@ export function directionalMaterial(bake){
    vec4 texel=mix(mix(t0,t1,aw),mix(t2,t3,aw),ew);
    // Preserve expected silhouette coverage using ordered screen-space alpha testing.
    // Unlike a fixed cutoff, a single contributing view can retain thin foliage.
-   float coverage=clamp(texel.a,0.0,1.0);
+   float coverage=clamp(max(texel.a,0.65*max(max(t0.a,t1.a),max(t2.a,t3.a))),0.0,1.0);
    vec2 pixel=mod(floor(gl_FragCoord.xy),4.0);
    float x0=mod(pixel.x,2.0),y0=mod(pixel.y,2.0);
    float x1=floor(pixel.x/2.0),y1=floor(pixel.y/2.0);
    float threshold=(4.0*(2.0*mod(x0+y0,2.0)+y0)+2.0*mod(x1+y1,2.0)+y1+0.5)/16.0;
    if(coverage<=threshold)discard;
-   diffuseColor*=vec4(texel.rgb/max(texel.a,0.00001),1.0);
+   // If blended view has no visible sample, keep color from the strongest neighbor.
+   vec4 strongest=t0;if(t1.a>strongest.a)strongest=t1;if(t2.a>strongest.a)strongest=t2;if(t3.a>strongest.a)strongest=t3;
+   vec3 rgb=texel.a>0.02?texel.rgb/max(texel.a,0.00001):strongest.rgb/max(strongest.a,0.00001);
+   diffuseColor*=vec4(rgb,1.0);
   `);
   s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;');
  };
- mat.customProgramCacheKey=()=> 'directional-tree-atlas-v3';return mat;
+ mat.customProgramCacheKey=()=> 'directional-tree-atlas-v4';return mat;
 }
 export function proceduralBakeObject(p,photo){
  const o=new T.Group(),wood=new T.MeshBasicMaterial({color:0x786b52,toneMapped:false}),leaf=new T.MeshBasicMaterial({map:photo,alphaTest:.35,side:T.DoubleSide,toneMapped:false});
