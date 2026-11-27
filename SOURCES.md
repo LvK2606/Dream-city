@@ -68,3 +68,6 @@ Original depth-derived mask and bounded proxy calibration; no new assets or depe
 
 ## v0.4.10.9
 Technique reference: Anderson Mancini, ektogamat/octahedral-impostor-component, MIT, https://github.com/ektogamat/octahedral-impostor-component/tree/f94290693e0966dbb2e2dba89591734753a4582f. Original WebGL2 adaptation, no copied upstream component. See docs/OPEN_SOURCE_STAGE2.md for investigation and source decisions.
+
+## v0.4.10.10
+Pine Sapling Small, https://polyhaven.com/a/pine_sapling_small, CC0; Rico Cilliers (model), Rob Tuytel (photography). Source authored model, scan not verified. Build manifest must validate exact download and optimized GLB. Original hillside infill.

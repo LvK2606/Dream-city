@@ -205,11 +205,11 @@ export function silhouettePass(results){
 // Small deterministic bounded candidate set. Render and measure each candidate;
 // never change acceptance limits to fit output. Independent diagonal views are
 // evaluated only after selection and cannot influence the selected profile.
-export function calibratedSourcePatches(renderer,bake){
+export function calibratedSourcePatches(renderer,bake,additional=false){
  const {texture,covered}=sourceMaskTexture(bake),trials=[];
  let best=null,score=-Infinity;
  try{
-  for(const [scale,frontOnly] of [[1,false],[.9,false],[.8,false],[1,true]]){
+  for(const [scale,frontOnly] of (additional?[[1,false],[.9,false],[.8,false],[1,true],[.9,true],[.8,true],[.7,false]]:[[1,false],[.9,false],[.8,false],[1,true]])){
    const candidate=sourcePatches(bake,scale),side=frontOnly?T.FrontSide:T.DoubleSide;
    candidate.silhouette=compareSourceSilhouette(renderer,bake,candidate.geometry,texture,side,.5);
    const pass=silhouettePass(candidate.silhouette),mean=candidate.silhouette.reduce((n,s)=>n+s.iou,0)/6;

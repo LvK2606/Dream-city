@@ -7,8 +7,9 @@ import validator from 'gltf-validator';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {dedup,prune,simplify,meshopt} from '@gltf-transform/functions';
 import {MeshoptSimplifier,MeshoptEncoder,MeshoptDecoder} from 'meshoptimizer';
-const id='tree_small_02',dir='public/tree-model',temp=await mkdtemp(path.join(tmpdir(),'dream-tree-'));
-await mkdir(dir,{recursive:true});let manifest={ready:false,id,license:'CC0',author:'Rico Cilliers',sourceType:'photoreal-authored-model; scan provenance unverified'},total=0;
+const id=process.argv[2]??'tree_small_02';if(!['tree_small_02','pine_sapling_small'].includes(id))throw Error('unsupported tree source');
+const dir=id==='tree_small_02'?'public/tree-model':'public/tree-model/pine',temp=await mkdtemp(path.join(tmpdir(),'dream-tree-'));
+await mkdir(dir,{recursive:true});let manifest={ready:false,id,license:'CC0',author:id==='tree_small_02'?'Rico Cilliers':'Rico Cilliers (model), Rob Tuytel (photography)',sourceType:'photoreal-authored-model; scan provenance unverified'},total=0;
 const files={};
 function safe(s){if(typeof s!=='string'||s.startsWith('/')||s.includes('\\')||s.split('/').some(p=>p==='..'||p==='.')||!/^[-a-zA-Z0-9_./% ]+$/.test(s))throw Error('invalid tree URI');return s}
 async function get(name,info){name=safe(name);const u=new URL(info.url);if(u.protocol!=='https:'||u.hostname!=='dl.polyhaven.org')throw Error('invalid tree asset host');
@@ -19,7 +20,7 @@ async function get(name,info){name=safe(name);const u=new URL(info.url);if(u.pro
  await mkdir(path.dirname(path.join(temp,name)),{recursive:true});await writeFile(path.join(temp,name),b);files[name]={bytes:b.length,sha256:createHash('sha256').update(b).digest('hex')};return b;
 }
 try{
- const r=await fetch('https://api.polyhaven.com/files/'+id,{headers:{'User-Agent':'DreamCity/0.4.10.2 (github.com/LvK2606/Dream-city)'},signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('tree metadata '+r.status);
+ const r=await fetch('https://api.polyhaven.com/files/'+id,{headers:{'User-Agent':'DreamCity/0.4.10.10 (github.com/LvK2606/Dream-city)'},signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('tree metadata '+r.status);
  const m=await r.json(),entry=m.gltf?.['1k']?.gltf;if(!entry?.url)throw Error('no 1k tree glTF');
  const name=safe(decodeURIComponent(new URL(entry.url).pathname.split('/').pop())),json=JSON.parse((await get(name,entry)).toString('utf8'));
  const uris=[...new Set([...(json.buffers??[]),...(json.images??[])].map(x=>x.uri).filter(x=>x&&!x.startsWith('data:')))];
