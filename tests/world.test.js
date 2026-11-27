@@ -84,3 +84,6 @@ test('hybrid foliage uses baked view cells and actual intersecting geometry',()=
 
 import {reliefCards} from '../src/directional-impostor.js';
 test('source-depth relief proxy has bounded triangles and actual displaced positions',()=>{const data=new Uint8Array(2048*1024);data.fill(190);const b={extent:3,center:[0,2,0],atlas:[2048,1024],depthBytes:data,depthRange:3.45};const r=reliefCards(b);assert.equal(r.geometry.index.count/3,1280);assert.equal(r.sampled,r.total);assert.ok(r.geometry.attributes.position.array.every(Number.isFinite));r.geometry.dispose();assert.throws(()=>reliefCards({...b,depthBytes:new Uint8Array(1)}),/missing relief depth/)});
+
+import {prototypeOptions} from '../src/tree-prototypes.js';
+test('denser source canopy retains deterministic species settings',()=>{for(let i=0;i<3;i++){const tree={options:{bark:{},branch:{children:{},length:{},radius:{},sections:{},segments:{},start:{},angle:{},gnarliness:{}},leaves:{}}};prototypeOptions(tree,i);assert.equal(tree.options.leaves.count,13);assert.equal(tree.options.seed,775+81*i);assert.ok(tree.options.leaves.size>2.5)}});

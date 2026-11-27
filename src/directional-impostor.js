@@ -29,7 +29,7 @@ export function bakeDirectional(renderer,object,box){
  const tile=TILE,inside=tile-2*GUTTER,canvas=document.createElement('canvas');canvas.width=AZIMUTHS*tile;canvas.height=ELEVATIONS.length*tile;
  const ctx=canvas.getContext('2d'),target=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false});target.texture.colorSpace=T.SRGBColorSpace;
  const scene=new T.Scene();scene.add(object);
- const range=extent*1.15,camera=new T.OrthographicCamera(-extent,extent,extent,-extent,20-range,20+range),coverage=[],depthCoverage=[],depthRanges=[];
+ const range=extent*1.15,camera=new T.OrthographicCamera(-extent,extent,extent,-extent,20-range,20+range),coverage=[],enhancedCoverage=[],depthCoverage=[],depthRanges=[];
  const depthTarget=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false});
  const depthBytes=new Uint8Array(canvas.width*canvas.height),materials=[];
  object.traverse(o=>{if(!o.isMesh)return;const source=o.material;
@@ -50,6 +50,8 @@ export function bakeDirectional(renderer,object,box){
    const c=count/(inside*inside);if(c<.008||c>.94)throw Error('invalid directional coverage '+c+' at '+a+'/'+e);coverage.push(c);
    // Fill one-pixel alpha gaps only inside this view. Preserve the original color of the selected adjacent leaf.
    enhanceCoverage(im.data,inside,inside);
+   let weighted=0;for(let j=3;j<im.data.length;j+=4)weighted+=im.data[j]/255;
+   enhancedCoverage.push(weighted/(inside*inside));
    ctx.putImageData(im,a*tile+GUTTER,(ELEVATIONS.length-1-e)*tile+GUTTER);
    // Same camera, alpha mask and mesh; record actual linear orthographic inverse depth.
    for(const m of materials)m.o.material=m.depth;
@@ -64,10 +66,10 @@ export function bakeDirectional(renderer,object,box){
    depthCoverage.push(n/(inside*inside));depthRanges.push([min,max]);
   }
  }finally{renderer.setRenderTarget(prev);renderer.setClearColor(clear,alpha);renderer.autoClear=auto;renderer.shadowMap.enabled=shadow;renderer.xr.enabled=xr;target.dispose();depthTarget.dispose();for(const m of materials){m.o.material=m.source;for(const d of (Array.isArray(m.depth)?m.depth:[m.depth]))d.dispose()}scene.remove(object)}
- const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.minFilter=T.LinearFilter;texture.generateMipmaps=false;
+ const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.minFilter=T.LinearMipmapLinearFilter;texture.generateMipmaps=true;
  const geometry=new T.PlaneGeometry(extent*2,extent*2);geometry.translate(center.x,center.y,center.z);geometry.computeBoundingSphere();geometry.boundingSphere.radius=extent*Math.SQRT2;
  const depthTexture=new T.DataTexture(depthBytes,canvas.width,canvas.height,T.RedFormat,T.UnsignedByteType);depthTexture.minFilter=depthTexture.magFilter=T.NearestFilter;depthTexture.generateMipmaps=false;depthTexture.needsUpdate=true;
- return {texture,depthTexture,depthBytes,geometry,coverage,depthCoverage,depthRanges,depthRange:range,extent,center:center.toArray(),views:coverage.length,atlas:[canvas.width,canvas.height]};
+ return {texture,depthTexture,depthBytes,geometry,coverage,enhancedCoverage,depthCoverage,depthRanges,depthRange:range,extent,center:center.toArray(),views:coverage.length,atlas:[canvas.width,canvas.height]};
 }
 // Use actual baked views, not an unrelated leaf collage, for volumetric mid-LOD.
 // Four intersecting vertical planes plus a pitched canopy plane preserve aerial silhouettes.
@@ -110,10 +112,10 @@ export function volumeMaterial(bake){
  m.onBeforeCompile=s=>{s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.08;')};
  m.customProgramCacheKey=()=> 'tree-volume-atlas-v1';return m;
 }
-export function directionalMaterial(bake){
+export function directionalMaterial(bake,depthMode={value:0}){
  const mat=new T.MeshStandardMaterial({map:bake.texture,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.95});
  mat.onBeforeCompile=s=>{
-  s.uniforms.dreamCenter={value:new T.Vector3(...bake.center)};s.uniforms.dreamDepth={value:bake.depthTexture};s.uniforms.dreamDepthScale={value:bake.depthRange/bake.extent};
+  s.uniforms.dreamCenter={value:new T.Vector3(...bake.center)};s.uniforms.dreamDepth={value:bake.depthTexture};s.uniforms.dreamDepthScale={value:bake.depthRange/bake.extent};s.uniforms.dreamDepthEnabled=depthMode;
   s.vertexShader='uniform vec3 dreamCenter; varying vec2 dreamAngles;\n'+s.vertexShader;
   s.vertexShader=s.vertexShader.replace('#include <project_vertex>',`
    vec4 centerWorld=modelMatrix*instanceMatrix*vec4(dreamCenter,1.0);
@@ -130,11 +132,12 @@ export function directionalMaterial(bake){
    vec4 mvPosition=viewMatrix*vec4(centerWorld.xyz+(right*offset.x+up*offset.y)*instanceScale,1.);
    gl_Position=projectionMatrix*mvPosition;
   `);
-  s.vertexShader=s.vertexShader.replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\ntransformedNormal=normalize(vec3(0.0,0.45,1.0));');
+  s.vertexShader=s.vertexShader.replace('#include <defaultnormal_vertex>','#include <defaultnormal_vertex>\ntransformedNormal=normalize(mat3(viewMatrix)*vec3(0.0,1.0,0.0));');
   s.fragmentShader=`
   varying vec2 dreamAngles;
   uniform sampler2D dreamDepth;
   uniform float dreamDepthScale;
+  uniform float dreamDepthEnabled;
   vec3 treeDir(float yaw,float pitch){return vec3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch));}
   vec3 treeRight(float yaw){return vec3(cos(yaw),0.,-sin(yaw));}
   vec2 treeCell(vec2 uv,float a,float e){return (vec2(a,e)+vec2(2./256.)+clamp(uv,0.,1.)*(252./256.))/vec2(8.,4.);}
@@ -163,19 +166,26 @@ export function directionalMaterial(bake){
    float e0=0.0,ew=clamp((elev+30.0)/30.0,0.0,1.0);
    if(elev>=0.0){e0=1.0;ew=clamp(elev/35.0,0.0,1.0);}
    if(elev>=35.0){e0=2.0;ew=clamp((elev-35.0)/35.0,0.0,1.0);}
-   vec4 t0=texture2D(map,treeCell(treeReproject(vMapUv,a0,e0),a0,e0));
-   vec4 t1=texture2D(map,treeCell(treeReproject(vMapUv,a1,e0),a1,e0));
-   vec4 t2=texture2D(map,treeCell(treeReproject(vMapUv,a0,e0+1.),a0,e0+1.));
-   vec4 t3=texture2D(map,treeCell(treeReproject(vMapUv,a1,e0+1.),a1,e0+1.));
-   // Disocclusion guard: if warped samples lose coverage, recover same-cell unwarped color.
-   vec4 u0=texture2D(map,treeCell(vMapUv,a0,e0)),u1=texture2D(map,treeCell(vMapUv,a1,e0));
-   vec4 u2=texture2D(map,treeCell(vMapUv,a0,e0+1.)),u3=texture2D(map,treeCell(vMapUv,a1,e0+1.));
-   if(t0.a<u0.a*.5)t0=u0;if(t1.a<u1.a*.5)t1=u1;if(t2.a<u2.a*.5)t2=u2;if(t3.a<u3.a*.5)t3=u3;
+   // Default path uses four filtered color taps. Bound mip level to avoid mixing atlas cells.
+   float footprint=max(length(dFdx(vMapUv)),length(dFdy(vMapUv)))*252.;
+   float mip=clamp(log2(max(footprint,1.)),0.,4.);
+   vec4 t0=textureLod(map,treeCell(vMapUv,a0,e0),mip);
+   vec4 t1=textureLod(map,treeCell(vMapUv,a1,e0),mip);
+   vec4 t2=textureLod(map,treeCell(vMapUv,a0,e0+1.),mip);
+   vec4 t3=textureLod(map,treeCell(vMapUv,a1,e0+1.),mip);
+   // Explicit, uniform QA-only A/B toggle, rather than expensive depth taps on every tree.
+   if(dreamDepthEnabled>.5){
+    vec4 u0=textureLod(map,treeCell(treeReproject(vMapUv,a0,e0),a0,e0),mip);
+    vec4 u1=textureLod(map,treeCell(treeReproject(vMapUv,a1,e0),a1,e0),mip);
+    vec4 u2=textureLod(map,treeCell(treeReproject(vMapUv,a0,e0+1.),a0,e0+1.),mip);
+    vec4 u3=textureLod(map,treeCell(treeReproject(vMapUv,a1,e0+1.),a1,e0+1.),mip);
+    if(u0.a>=t0.a*.5)t0=u0;if(u1.a>=t1.a*.5)t1=u1;if(u2.a>=t2.a*.5)t2=u2;if(u3.a>=t3.a*.5)t3=u3;
+   }
    t0.rgb*=t0.a;t1.rgb*=t1.a;t2.rgb*=t2.a;t3.rgb*=t3.a;
    vec4 texel=mix(mix(t0,t1,aw),mix(t2,t3,aw),ew);
    // Preserve expected silhouette coverage using ordered screen-space alpha testing.
    // Unlike a fixed cutoff, a single contributing view can retain thin foliage.
-   float coverage=clamp(max(texel.a,0.65*max(max(t0.a,t1.a),max(t2.a,t3.a))),0.0,1.0);
+   float coverage=clamp(max(texel.a,0.78*max(max(t0.a,t1.a),max(t2.a,t3.a)))*mix(1.,1.45,mip/4.),0.0,1.0);
    vec2 pixel=mod(floor(gl_FragCoord.xy),4.0);
    float x0=mod(pixel.x,2.0),y0=mod(pixel.y,2.0);
    float x1=floor(pixel.x/2.0),y1=floor(pixel.y/2.0);
@@ -188,7 +198,7 @@ export function directionalMaterial(bake){
   `);
   s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;');
  };
- mat.customProgramCacheKey=()=> 'directional-tree-depth-reproject-v5';return mat;
+ mat.customProgramCacheKey=()=> 'directional-tree-filtered-ab-v6';return mat;
 }
 export function proceduralBakeObject(p,photo){
  const o=new T.Group(),wood=new T.MeshBasicMaterial({color:0x786b52,toneMapped:false}),leaf=new T.MeshBasicMaterial({map:photo,alphaTest:.35,side:T.DoubleSide,toneMapped:false});

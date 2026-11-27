@@ -100,7 +100,7 @@ function silhouette(tex){
  const out=new T.CanvasTexture(c);out.colorSpace=T.SRGBColorSpace;out.anisotropy=4;return out;
 }
 export function createVegetation(scene,rows,bark,renderer){
- let tex=leafTexture(),farTex=silhouette(tex);
+ let tex=leafTexture(),farTex=silhouette(tex);const depthMode={value:0};
  const mats=[tex,farTex].map(map=>new T.MeshStandardMaterial({map,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.86}));
  // A subtle two-sided diffuse lift, not emission; neutral instance tint avoids multiplying green twice.
  for(const m of mats){m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;')};m.customProgramCacheKey=()=> 'foliage-soft-diffuse-v1'}
@@ -140,9 +140,9 @@ export function createVegetation(scene,rows,bark,renderer){
     if(relief){near.wood.geometry.dispose();near.leaf.geometry.dispose();near.leaf.geometry=relief.geometry;near.leaf.material=material;near.leaf.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:b.texture,alphaTest:.28,side:T.DoubleSide});near.baked=true;near.triangles=relief.geometry.index.count/3;}
     for(const batch of [mid,midFar,far]){
      const geo=batch===far?b.geometry:volumeCards(b,batch===mid);
-     batch.leaf.geometry.dispose();batch.leaf.geometry=geo;batch.leaf.material=batch===far?directionalMaterial(b):material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=geo.index.count/3;
+     batch.leaf.geometry.dispose();batch.leaf.geometry=geo;batch.leaf.material=batch===far?directionalMaterial(b,depthMode):material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=geo.index.count/3;
     }
-    pipeline.species.push({species,source,sourceTriangles:relief?full.report.renderedTriangles:p.detail,nearTriangles:near.triangles,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:source,reliefSamples:relief?.sampled??0,reliefVertices:relief?.total??0,views:b.views,coverage:b.coverage,depthCoverage:b.depthCoverage,depthRanges:b.depthRanges,depthAtlasBytes:b.depthBytes.length,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
+    pipeline.species.push({species,source,sourceTriangles:relief?full.report.renderedTriangles:p.detail,nearTriangles:near.triangles,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:source,reliefSamples:relief?.sampled??0,reliefVertices:relief?.total??0,views:b.views,coverage:b.coverage,enhancedCoverage:b.enhancedCoverage,filteredMipmaps:b.texture.generateMipmaps,depthCoverage:b.depthCoverage,depthRanges:b.depthRanges,depthAtlasBytes:b.depthBytes.length,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
    }
    Object.assign(pipeline,{ready:true,loaded:true});
   }catch(e){for(const {p,b,relief} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry,relief?.geometry])g?.dispose();b.texture.dispose();b.depthTexture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}
@@ -167,7 +167,7 @@ export function createVegetation(scene,rows,bark,renderer){
   const lower=understory.update(camera,quality);stats={understory:lower,near:counts[0],mid:counts[1],far:counts[2]+counts[3],levels:counts,visibleLevels,total:rows.length,rendered:rows.length-culled,culled,triangles,source:status.source,species:3,legacyCanopy:false,regions:regions.size,activeBatches,mainPassDrawUpperBound:activeBatches*2,neutralTint:true,strategy:'global-species-lod/mobile-frustum'};
   return true;
  }
- return {update,qaTree:()=>{const candidates=plants.filter(p=>p.species===0&&p.r.x>165&&p.r.x<220&&Math.abs(p.r.z)<110);const score=p=>Math.min(...plants.filter(q=>q.i!==p.i).map(q=>Math.hypot(p.r.x-q.r.x,p.r.z-q.r.z)));const p=candidates.sort((a,b)=>score(b)-score(a))[0]??plants.find(p=>p.species===0);return p?{...p.r,index:p.i,species:p.species,lod:drawnLod[p.i]}:null},report:()=>({...stats,assets:{...status},pipeline:{...pipeline}})};
+ return {update,setDepthMode:(enabled)=>{depthMode.value=enabled?1:0;return !!depthMode.value},qaTree:()=>{const candidates=plants.filter(p=>p.species===0&&p.r.x>165&&p.r.x<220&&Math.abs(p.r.z)<110);const score=p=>Math.min(...plants.filter(q=>q.i!==p.i).map(q=>Math.hypot(p.r.x-q.r.x,p.r.z-q.r.z)));const p=candidates.sort((a,b)=>score(b)-score(a))[0]??plants.find(p=>p.species===0);return p?{...p.r,index:p.i,species:p.species,lod:drawnLod[p.i]}:null},report:()=>({...stats,assets:{...status},pipeline:{...pipeline,depthEnabled:!!depthMode.value,defaultColorTaps:4,depthModeColorTaps:8,depthModeDepthTaps:4}})};
 }
 
  // Original undergrowth: local seeded shrub clusters and grass tufts, two instanced draws.

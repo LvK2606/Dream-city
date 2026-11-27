@@ -45,3 +45,6 @@ Require volumetric baked LOD1/2 (14/10 triangles) and 2-triangle directional LOD
 
 ## v0.4.10.5
 Require actual depth coverage/range in 96 rendered views, same source ID all four LODs, 1280-triangle external relief proxy, four exact-tree sweep captures with submitted LOD and same index. Previous 9 budgets, 20 original captures, 15 KTX2 and glTF gates remain. Compare appearance, depth warping, coverage and LOD changes; do not treat software render as physical GPU or direct deployment QA.
+
+## v0.4.10.6
+Require existing 24 captures and nine budgets, actual mipmapped foliage atlases with reported per-view weighted alpha coverage, default four color taps, depth reprojection disabled by default; fixed desktop street A/B/A actual mode and camera, two extra captures and timing report. No timing threshold change or claim of physical GPU results. Inspect all 26 images and compare baseline.

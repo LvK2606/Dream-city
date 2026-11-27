@@ -19,7 +19,7 @@ export function prototypeOptions(tree,species){
  Object.assign(o.branch.start,{1:.36,2:.25});
  Object.assign(o.branch.angle,{1:[49,35,61][species],2:55});
  Object.assign(o.branch.gnarliness,{0:.09,1:.12,2:.13});
- o.leaves.count=9;o.leaves.size=[2.8,2.3,3.0][species];o.leaves.sizeVariance=.35;o.leaves.start=.15;o.leaves.billboard='double';
+ o.leaves.count=13;o.leaves.size=[3.05,2.52,3.25][species];o.leaves.sizeVariance=.35;o.leaves.start=.15;o.leaves.billboard='double';
  return tree;
 }
 function bounds(wood,leaf){wood.computeBoundingBox();leaf.computeBoundingBox();return wood.boundingBox.clone().union(leaf.boundingBox)}
