@@ -69,11 +69,19 @@ export function directionalMaterial(bake){
    vec4 t3=texture2D(map,(vec2(a1,e0+1.0)+uv)/cell);
    t0.rgb*=t0.a;t1.rgb*=t1.a;t2.rgb*=t2.a;t3.rgb*=t3.a;
    vec4 texel=mix(mix(t0,t1,aw),mix(t2,t3,aw),ew);
-   diffuseColor*=vec4(texel.rgb/max(texel.a,0.00001),texel.a);
+   // Preserve expected silhouette coverage using ordered screen-space alpha testing.
+   // Unlike a fixed cutoff, a single contributing view can retain thin foliage.
+   float coverage=clamp(texel.a,0.0,1.0);
+   vec2 pixel=mod(floor(gl_FragCoord.xy),4.0);
+   float x0=mod(pixel.x,2.0),y0=mod(pixel.y,2.0);
+   float x1=floor(pixel.x/2.0),y1=floor(pixel.y/2.0);
+   float threshold=(4.0*(2.0*mod(x0+y0,2.0)+y0)+2.0*mod(x1+y1,2.0)+y1+0.5)/16.0;
+   if(coverage<=threshold)discard;
+   diffuseColor*=vec4(texel.rgb/max(texel.a,0.00001),1.0);
   `);
   s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;');
  };
- mat.customProgramCacheKey=()=> 'directional-tree-atlas-v2';return mat;
+ mat.customProgramCacheKey=()=> 'directional-tree-atlas-v3';return mat;
 }
 export function proceduralBakeObject(p,photo){
  const o=new T.Group(),wood=new T.MeshBasicMaterial({color:0x786b52,toneMapped:false}),leaf=new T.MeshBasicMaterial({map:photo,alphaTest:.35,side:T.DoubleSide,toneMapped:false});
