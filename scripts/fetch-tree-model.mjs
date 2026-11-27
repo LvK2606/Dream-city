@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {NodeIO} from '@gltf-transform/core';
+import validator from 'gltf-validator';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {dedup,prune,simplify,meshopt} from '@gltf-transform/functions';
 import {MeshoptSimplifier,MeshoptEncoder,MeshoptDecoder} from 'meshoptimizer';
@@ -30,10 +31,21 @@ try{
  const before=count();if(before<100||before>4000000)throw Error('invalid source triangle budget '+before);
  await d.transform(dedup(),prune(),simplify({simplifier:MeshoptSimplifier,ratio:.16,error:.025}),prune());
  const after=count();if(!Number.isFinite(after)||after<=0||after>350000||after>before)throw Error('optimized tree triangle budget '+after);
+ const plain=await io.writeBinary(d);
+ const validate=async(bytes,uri)=>{const report=await validator.validateBytes(new Uint8Array(bytes),{uri,maxIssues:1000});return {validatorVersion:report.validatorVersion,errors:report.issues.numErrors,warnings:report.issues.numWarnings,infos:report.issues.numInfos,messages:report.issues.messages.map(({code,message,severity,pointer})=>({code,message,severity,pointer}))}};
+ const uncompressed=await validate(plain,'tree-uncompressed.glb');
+ await writeFile(dir+'/validation-uncompressed.json',JSON.stringify(uncompressed,null,2));
+ if(uncompressed.errors)throw Error('uncompressed glTF validation errors '+uncompressed.errors);
  await d.transform(meshopt({encoder:MeshoptEncoder,level:'medium'}));
  const glb=Buffer.from(await io.writeBinary(d));if(glb.length>20*1024*1024||glb.length<1000)throw Error('optimized tree byte budget '+glb.length);
+ const compressed=await validate(glb,'tree.glb');
+ await writeFile(dir+'/validation-compressed.json',JSON.stringify(compressed,null,2));
+ // Official validator may report unsupported extension, retain warnings. Never suppress errors.
+ if(compressed.errors)throw Error('compressed glTF validation errors '+compressed.errors);
+ const decoded=await io.readBinary(glb),decodedTriangles=decoded.getRoot().listMeshes().reduce((n,m)=>n+m.listPrimitives().reduce((v,p)=>v+(p.getIndices()?.getCount()??p.getAttribute('POSITION')?.getCount()??0)/3,0),0);
+ if(decodedTriangles!==after)throw Error('meshopt roundtrip triangle mismatch');
  await writeFile(dir+'/tree.glb',glb);
- manifest={...manifest,ready:true,name:'tree.glb',sourceBytes:total,bytes:glb.length,beforeTriangles:before,afterTriangles:after,sha256:createHash('sha256').update(glb).digest('hex'),files,optimization:'gltf-transform/meshopt'};
+ manifest={...manifest,ready:true,name:'tree.glb',sourceBytes:total,bytes:glb.length,beforeTriangles:before,afterTriangles:after,sha256:createHash('sha256').update(glb).digest('hex'),files,validation:{uncompressed:{errors:uncompressed.errors,warnings:uncompressed.warnings},compressed:{errors:compressed.errors,warnings:compressed.warnings},decodedTriangles},optimization:'gltf-transform/meshopt'};
  console.log('FULL_TREE_ASSET',JSON.stringify(manifest));
 }catch(e){manifest.error=String(e);console.error('FULL_TREE_ASSET_FAILED',String(e));}
 finally{await writeFile(dir+'/manifest.json',JSON.stringify(manifest,null,2));await rm(temp,{recursive:true,force:true})}

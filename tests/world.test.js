@@ -78,3 +78,6 @@ test('directional atlas wraps yaw and brackets elevation',()=>{const a=direction
 
 import {enhanceCoverage,TILE} from '../src/directional-impostor.js';
 test('impostor coverage expansion is limited to one texel and preserves original covered samples',()=>{const p=new Uint8ClampedArray(7*7*4),i=(3*7+3)*4;p.set([20,80,30,255],i);enhanceCoverage(p,7,7);assert.deepEqual(Array.from(p.slice(i,i+4)),[20,80,30,255]);assert.deepEqual(Array.from(p.slice(i+4,i+8)),[20,80,30,140]);assert.equal(p[i+11],0);assert.equal(p[i+7*4+7],0);assert.equal(TILE,256)});
+
+import {volumeCards} from '../src/directional-impostor.js';
+test('hybrid foliage uses baked view cells and actual intersecting geometry',()=>{for(const extra of [false,true]){const g=volumeCards({extent:3,center:[0,2,0]},extra);assert.equal(g.index.count/3,extra?14:10);const p=g.attributes.position,uv=g.attributes.uv;let z=0;for(let i=0;i<p.count;i++){z=Math.max(z,Math.abs(p.getZ(i)));assert.ok(uv.getX(i)>0&&uv.getX(i)<1&&uv.getY(i)>0&&uv.getY(i)<1)}assert.ok(z>2);assert.ok(g.boundingSphere.radius>3);g.dispose()}});

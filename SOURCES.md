@@ -50,3 +50,6 @@ Poly Haven tree_small_02 by Rico Cilliers (CC0; full photoreal authored asset, s
 
 ## v0.4.10.3
 Original bounded coverage filter and shared LOD2/3 atlas; existing Poly Haven CC0 material maps encoded with existing Basis Universal wrapper, linear normals/roughness. No additional third-party source.
+
+## v0.4.10.4
+Khronos glTF Validator 2.0.0-dev.3.10 (Apache-2.0), https://github.com/KhronosGroup/glTF-Validator; original volumetric baked cards, Basis ETC1S/UASTC channel policy. No new proprietary assets.

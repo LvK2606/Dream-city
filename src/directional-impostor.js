@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 // Original WebGL2 azimuth/elevation atlas. No upstream shader copied.
 // 8 azimuths x 4 elevations, one quad per instance; reflection uses its actual render camera.
 export const AZIMUTHS=8,ELEVATIONS=[-30,0,35,70],TILE=256,GUTTER=2;
@@ -48,6 +49,23 @@ export function bakeDirectional(renderer,object,box){
  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.minFilter=T.LinearFilter;texture.generateMipmaps=false;
  const geometry=new T.PlaneGeometry(extent*2,extent*2);geometry.translate(center.x,center.y,center.z);geometry.computeBoundingSphere();geometry.boundingSphere.radius=extent*Math.SQRT2;
  return {texture,geometry,coverage,extent,center:center.toArray(),views:coverage.length,atlas:[canvas.width,canvas.height]};
+}
+// Use actual baked views, not an unrelated leaf collage, for volumetric mid-LOD.
+// Four intersecting vertical planes plus a pitched canopy plane preserve aerial silhouettes.
+export function volumeCards(bake,extra=false){
+ const views=[{a:0,e:1},{a:1,e:1},{a:2,e:1},{a:3,e:1},{a:0,e:3}];
+ if(extra)views.push({a:2,e:2},{a:0,e:2});
+ const geos=views.map(({a,e})=>{
+  const g=new T.PlaneGeometry(bake.extent*2,bake.extent*2),uv=g.attributes.uv;
+  for(let i=0;i<uv.count;i++)uv.setXY(i,(a+(GUTTER+uv.getX(i)*(TILE-2*GUTTER))/TILE)/AZIMUTHS,(e+(GUTTER+uv.getY(i)*(TILE-2*GUTTER))/TILE)/ELEVATIONS.length);
+  g.rotateX(-ELEVATIONS[e]*Math.PI/180);g.rotateY(a*2*Math.PI/AZIMUTHS);g.translate(...bake.center);return g;
+ });
+ const merged=mergeGeometries(geos,false);for(const g of geos)g.dispose();merged.computeBoundingSphere();return merged;
+}
+export function volumeMaterial(bake){
+ const m=new T.MeshStandardMaterial({map:bake.texture,color:0xffffff,alphaTest:.28,side:T.DoubleSide,roughness:.92});
+ m.onBeforeCompile=s=>{s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.08;')};
+ m.customProgramCacheKey=()=> 'tree-volume-atlas-v1';return m;
 }
 export function directionalMaterial(bake){
  const mat=new T.MeshStandardMaterial({map:bake.texture,color:0xffffff,alphaTest:.35,side:T.DoubleSide,roughness:.95});

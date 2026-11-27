@@ -2,7 +2,7 @@ import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {rng,groundHeight} from './world.js';
 import {createPrototype} from './tree-prototypes.js';
-import {bakeDirectional,directionalMaterial,proceduralBakeObject} from './directional-impostor.js';
+import {bakeDirectional,directionalMaterial,proceduralBakeObject,volumeCards,volumeMaterial} from './directional-impostor.js';
 import {loadFullTree} from './full-tree.js';
 // Original geometry; optional CC0 photographic leaf atlas. Screen-space LOD with hysteresis.
 export function treeLOD(distance,previous,quality){
@@ -105,7 +105,7 @@ export function createVegetation(scene,rows,bark,renderer){
  // A subtle two-sided diffuse lift, not emission; neutral instance tint avoids multiplying green twice.
  for(const m of mats){m.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;')};m.customProgramCacheKey=()=> 'foliage-soft-diffuse-v1'}
  const depths=[tex,farTex].map(map=>new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map,alphaTest:.35,side:T.DoubleSide}));
- const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'azimuth-elevation-directional',cameraFacing:true,fullModel:{loaded:false}};
+ const status={ready:false,loaded:false,source:'procedural-fallback'},pipeline={ready:false,loaded:false,library:'@dgreenheck/ez-tree@1.1.0',species:[],method:'hybrid-volume-directional',cameraFacing:true,fullModel:{loaded:false}};
  const task=photoAtlas().then(async a=>{const old=tex,oldFar=farTex;tex=a.tex;farTex=silhouette(tex);for(let i=0;i<2;i++){mats[i].map=depths[i].map=i?farTex:tex;mats[i].needsUpdate=depths[i].needsUpdate=true}old.dispose();oldFar.dispose();Object.assign(status,{loaded:true,source:a.id,coverage:a.coverage,bytes:a.bytes});await installPrototypes();status.ready=true;lastQuality='';}).catch(e=>{Object.assign(status,{ready:true,loaded:false,error:String(e)});Object.assign(pipeline,{ready:true,loaded:false,error:String(e)})});
  // 3 species x 4 tiers x 2 materials: max 24 main-pass tree submissions.
  // InstancedMesh avoids relying on WEBGL_multi_draw support; mobile compacts visible instances.
@@ -136,10 +136,12 @@ export function createVegetation(scene,rows,bark,renderer){
     finally{if(source&&source!==full)source.dispose()}
    }
    for(const {p,b,source} of pending){const species=p.species,near=batches[species*4];near.wood.geometry.dispose();near.leaf.geometry.dispose();near.wood.geometry=p.nearWood;near.leaf.geometry=p.nearLeaf;near.triangles=p.reduced;
-    const far=batches[species*4+3],midFar=batches[species*4+2],material=directionalMaterial(b);
-    for(const batch of [midFar,far]){batch.leaf.geometry.dispose();batch.leaf.geometry=batch===far?b.geometry:b.geometry.clone();batch.leaf.material=material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=batch.leaf.geometry.index.count/3;}
-    
-    pipeline.species.push({species,source,sourceTriangles:p.detail,nearTriangles:p.reduced,farTriangles:far.triangles,midFarTriangles:midFar.triangles,sharedFarAtlas:true,views:b.views,coverage:b.coverage,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
+    const far=batches[species*4+3],midFar=batches[species*4+2],mid=batches[species*4+1],material=volumeMaterial(b);
+    for(const batch of [mid,midFar,far]){
+     const geo=batch===far?b.geometry:volumeCards(b,batch===mid);
+     batch.leaf.geometry.dispose();batch.leaf.geometry=geo;batch.leaf.material=batch===far?directionalMaterial(b):material;batch.leaf.customDepthMaterial=null;batch.leaf.receiveShadow=false;batch.baked=true;batch.triangles=geo.index.count/3;
+    }
+    pipeline.species.push({species,source,sourceTriangles:p.detail,nearTriangles:p.reduced,farTriangles:far.triangles,midFarTriangles:midFar.triangles,midTriangles:mid.triangles,sharedFarAtlas:true,volumeCards:true,nearSource:'ez-tree',views:b.views,coverage:b.coverage,atlas:b.atlas,extent:b.extent,height:p.height});p.wood.dispose();p.leaf.dispose();
    }
    Object.assign(pipeline,{ready:true,loaded:true});
   }catch(e){for(const {p,b} of pending){for(const g of [p.wood,p.leaf,p.nearWood,p.nearLeaf,b.geometry])g.dispose();b.texture.dispose()}Object.assign(pipeline,{ready:true,loaded:false,error:String(e)});}

@@ -39,3 +39,6 @@ Require actual 32-view directional atlas for three species, external full tree s
 
 ## v0.4.10.3
 Require 15 actual decoded KTX2 PBR maps, 32 views per species, 2048x1024 atlas, shared LOD2/3 directional assets. Retain prior nine render budgets, interaction and captures; inspect foliage appearance, aliasing, PBR orientation/color, and measure GPU/device before final approval.
+
+## v0.4.10.4
+Require volumetric baked LOD1/2 (14/10 triangles) and 2-triangle directional LOD3; real 15 decoded PBR maps, mixed codecs, aggregate <=10 MB; Khronos validator zero errors before and after compression, decoded triangle count parity. Preserve 9 budgets and captures. Review riverbank and hillside foliage, not just counts.
