@@ -48,3 +48,6 @@ Require actual depth coverage/range in 96 rendered views, same source ID all fou
 
 ## v0.4.10.6
 Require existing 24 captures and nine budgets, actual mipmapped foliage atlases with reported per-view weighted alpha coverage, default four color taps, depth reprojection disabled by default; fixed desktop street A/B/A actual mode and camera, two extra captures and timing report. No timing threshold change or claim of physical GPU results. Inspect all 26 images and compare baseline.
+
+## v0.4.10.7
+Require six source-versus-rendered near proxy masks (minimum IoU .40, average .55, area ratio .65–1.55), actual source-depth voxel patches <=1536 triangles, four additional close views of same submitted LOD0, 30 captures total; existing performance/codec/validation/A-B gates unchanged. Source fidelity thresholds are technical criteria, not Cities: Skylines II parity scores.

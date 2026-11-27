@@ -59,3 +59,6 @@ Original depth-assisted reprojection and relief proxy. Verified Three.js r180 Me
 
 ## v0.4.10.6
 Original shader filtering, bounded mip sampling and QA mode A/B; existing sources and licenses unchanged.
+
+## v0.4.10.7
+Source-derived patch geometry, silhouette pixel QA and mip cell clamp are original. Poly Haven tree_small_02 CC0 page tags Geometry Nodes; photogrammetry unverified. No new external assets.

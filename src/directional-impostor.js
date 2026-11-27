@@ -107,6 +107,76 @@ export function reliefCards(bake){
  if(!sampled||geometry.index.count/3>1600){geometry.dispose();throw Error('invalid relief proxy')}
  return {geometry,sampled,total};
 }
+// Disconnected, source-depth patches avoid stretching a continuous plane over empty canopy.
+export function sourcePatches(bake){
+ const [width,height]=bake.atlas,inside=TILE-2*GUTTER,grid=12,maxPatches=768,candidates=[];
+ if(!bake.depthBytes||bake.depthBytes.length!==width*height)throw Error('missing source depth');
+ const views=Array.from({length:8},(_,a)=>({a,e:1})).concat([{a:0,e:2},{a:2,e:2},{a:4,e:2},{a:6,e:2},{a:0,e:3}]);
+ for(const {a,e} of views)for(let y=0;y<grid;y++)for(let x=0;x<grid;x++){
+  const u0=x/grid,u1=(x+1)/grid,v0=y/grid,v1=(y+1)/grid;
+  const ds=[];
+  for(let yy=Math.floor(v0*inside);yy<Math.floor(v1*inside);yy+=2)
+   for(let xx=Math.floor(u0*inside);xx<Math.floor(u1*inside);xx+=2){
+    const d=bake.depthBytes[(e*TILE+GUTTER+yy)*width+a*TILE+GUTTER+xx];if(d)ds.push(d);
+   }
+  if(ds.length<3)continue;
+  ds.sort((a,b)=>a-b);
+  const median=ds[Math.floor(ds.length*.5)],spread=ds[Math.floor(ds.length*.9)]-ds[Math.floor(ds.length*.1)];
+  const depth=Math.max(-bake.extent,Math.min(bake.extent,(median/255*2-1)*bake.depthRange));
+  const yaw=a*2*Math.PI/AZIMUTHS,pitch=ELEVATIONS[e]*Math.PI/180;
+  const right=new T.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),normal=new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)),up=new T.Vector3().crossVectors(normal,right);
+  const center=new T.Vector3(...bake.center).addScaledVector(right,((u0+u1)-1)*bake.extent).addScaledVector(up,((v0+v1)-1)*bake.extent).addScaledVector(normal,depth);
+  // Sparse lower trunk patches are retained; reward well-supported foliage and coherent depth.
+  const score=ds.length/(1+spread*.015)+(center.y<bake.center[1]*.8?12:0);
+  candidates.push({a,e,u0,u1,v0,v1,center,right,up,normal,score,spread,samples:ds.length});
+ }
+ candidates.sort((a,b)=>b.score-a.score);
+ const selected=[],voxels=new Map(),cell=2*bake.extent/grid*.8;
+ for(const p of candidates){
+  const key=p.center.toArray().map(v=>Math.floor(v/cell)).join(',');
+  const normals=voxels.get(key)??[];
+  // Keep at most two differently oriented patches per voxel; avoid repeated opaque layers.
+  if(normals.length>=2||normals.some(n=>Math.abs(n.dot(p.normal))>.88))continue;
+  normals.push(p.normal);voxels.set(key,normals);selected.push(p);if(selected.length>=maxPatches)break;
+ }
+ if(selected.length<24)throw Error('insufficient source patches '+selected.length);
+ const pos=[],uv=[],idx=[],normal=[];
+ for(const p of selected){
+  const i=pos.length/3,half=bake.extent/grid;
+  for(const [x,y,u,v] of [[-1,-1,p.u0,p.v0],[1,-1,p.u1,p.v0],[1,1,p.u1,p.v1],[-1,1,p.u0,p.v1]]){
+   const vtx=p.center.clone().addScaledVector(p.right,x*half).addScaledVector(p.up,y*half);
+   pos.push(...vtx.toArray());normal.push(...p.normal.toArray());
+   uv.push((p.a+(GUTTER+u*inside)/TILE)/AZIMUTHS,(p.e+(GUTTER+v*inside)/TILE)/ELEVATIONS.length);
+  }
+  idx.push(i,i+1,i+2,i,i+2,i+3);
+ }
+ const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(pos,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setAttribute('normal',new T.Float32BufferAttribute(normal,3));geometry.setIndex(idx);geometry.computeBoundingBox();geometry.computeBoundingSphere();
+ return {geometry,sampled:selected.length,total:candidates.length,voxels:voxels.size,depthSamples:selected.reduce((n,p)=>n+p.samples,0)};
+}
+// Actual source alpha mask vs actual proxy rendered alpha at matched orthographic views.
+export function compareSourceSilhouette(renderer,bake,geometry){
+ const inside=TILE-2*GUTTER,[width]=bake.atlas,target=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false}),scene=new T.Scene(),material=new T.MeshBasicMaterial({map:bake.texture,alphaTest:.28,side:T.DoubleSide,toneMapped:false});
+ scene.add(new T.Mesh(geometry,material));
+ const camera=new T.OrthographicCamera(-bake.extent,bake.extent,bake.extent,-bake.extent,20-bake.depthRange,20+bake.depthRange),center=new T.Vector3(...bake.center),results=[];
+ const prev=renderer.getRenderTarget(),clear=renderer.getClearColor(new T.Color()),alpha=renderer.getClearAlpha(),auto=renderer.autoClear,shadow=renderer.shadowMap.enabled,xr=renderer.xr.enabled;
+ try{
+  renderer.xr.enabled=false;renderer.shadowMap.enabled=false;renderer.autoClear=true;renderer.setClearColor(0,0);renderer.setRenderTarget(target);
+  for(const [a,e] of [[0,1],[2,1],[4,1],[6,1],[1,2],[3,3]]){
+   const yaw=a*2*Math.PI/AZIMUTHS,pitch=ELEVATIONS[e]*Math.PI/180;
+   camera.position.copy(center).addScaledVector(new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)),20);camera.lookAt(center);camera.updateMatrixWorld();
+   renderer.clear();renderer.render(scene,camera);
+   const bytes=new Uint8Array(inside*inside*4);renderer.readRenderTargetPixels(target,0,0,inside,inside,bytes);
+   let source=0,proxy=0,intersection=0,union=0;
+   for(let y=0;y<inside;y++)for(let x=0;x<inside;x++){
+    const s=bake.depthBytes[(e*TILE+GUTTER+y)*width+a*TILE+GUTTER+x]>0,p=bytes[(y*inside+x)*4+3]>100;
+    source+=Number(s);proxy+=Number(p);intersection+=Number(s&&p);union+=Number(s||p);
+   }
+   if(!source||!proxy||!union)throw Error('empty silhouette comparison');
+   results.push({azimuth:a,elevation:e,source,proxy,intersection,union,iou:intersection/union,areaRatio:proxy/source});
+  }
+ }finally{renderer.setRenderTarget(prev);renderer.setClearColor(clear,alpha);renderer.autoClear=auto;renderer.shadowMap.enabled=shadow;renderer.xr.enabled=xr;target.dispose();material.dispose()}
+ return results;
+}
 export function volumeMaterial(bake){
  const m=new T.MeshStandardMaterial({map:bake.texture,color:0xffffff,alphaTest:.28,side:T.DoubleSide,roughness:.92});
  m.onBeforeCompile=s=>{s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.08;')};
@@ -141,6 +211,7 @@ export function directionalMaterial(bake,depthMode={value:0}){
   vec3 treeDir(float yaw,float pitch){return vec3(sin(yaw)*cos(pitch),sin(pitch),cos(yaw)*cos(pitch));}
   vec3 treeRight(float yaw){return vec3(cos(yaw),0.,-sin(yaw));}
   vec2 treeCell(vec2 uv,float a,float e){return (vec2(a,e)+vec2(2./256.)+clamp(uv,0.,1.)*(252./256.))/vec2(8.,4.);}
+  vec2 treeFilteredCell(vec2 uv,float a,float e,float mip){float pad=max(2.,exp2(mip)*.5+1.);vec2 p=clamp(2.+clamp(uv,0.,1.)*252.,vec2(pad),vec2(256.-pad));return (vec2(a,e)+p/256.)/vec2(8.,4.);}
   float treeElev(float e){return radians(e<.5?-30.:e<1.5?0.:e<2.5?35.:70.);}
   vec2 treeReproject(vec2 uv,float a,float e){
    float yaw=a*0.78539816339,pitch=treeElev(e);
@@ -169,16 +240,16 @@ export function directionalMaterial(bake,depthMode={value:0}){
    // Default path uses four filtered color taps. Bound mip level to avoid mixing atlas cells.
    float footprint=max(length(dFdx(vMapUv)),length(dFdy(vMapUv)))*252.;
    float mip=clamp(log2(max(footprint,1.)),0.,4.);
-   vec4 t0=textureLod(map,treeCell(vMapUv,a0,e0),mip);
-   vec4 t1=textureLod(map,treeCell(vMapUv,a1,e0),mip);
-   vec4 t2=textureLod(map,treeCell(vMapUv,a0,e0+1.),mip);
-   vec4 t3=textureLod(map,treeCell(vMapUv,a1,e0+1.),mip);
+   vec4 t0=textureLod(map,treeFilteredCell(vMapUv,a0,e0,mip),mip);
+   vec4 t1=textureLod(map,treeFilteredCell(vMapUv,a1,e0,mip),mip);
+   vec4 t2=textureLod(map,treeFilteredCell(vMapUv,a0,e0+1.,mip),mip);
+   vec4 t3=textureLod(map,treeFilteredCell(vMapUv,a1,e0+1.,mip),mip);
    // Explicit, uniform QA-only A/B toggle, rather than expensive depth taps on every tree.
    if(dreamDepthEnabled>.5){
-    vec4 u0=textureLod(map,treeCell(treeReproject(vMapUv,a0,e0),a0,e0),mip);
-    vec4 u1=textureLod(map,treeCell(treeReproject(vMapUv,a1,e0),a1,e0),mip);
-    vec4 u2=textureLod(map,treeCell(treeReproject(vMapUv,a0,e0+1.),a0,e0+1.),mip);
-    vec4 u3=textureLod(map,treeCell(treeReproject(vMapUv,a1,e0+1.),a1,e0+1.),mip);
+    vec4 u0=textureLod(map,treeFilteredCell(treeReproject(vMapUv,a0,e0),a0,e0,mip),mip);
+    vec4 u1=textureLod(map,treeFilteredCell(treeReproject(vMapUv,a1,e0),a1,e0,mip),mip);
+    vec4 u2=textureLod(map,treeFilteredCell(treeReproject(vMapUv,a0,e0+1.),a0,e0+1.,mip),mip);
+    vec4 u3=textureLod(map,treeFilteredCell(treeReproject(vMapUv,a1,e0+1.),a1,e0+1.,mip),mip);
     if(u0.a>=t0.a*.5)t0=u0;if(u1.a>=t1.a*.5)t1=u1;if(u2.a>=t2.a*.5)t2=u2;if(u3.a>=t3.a*.5)t3=u3;
    }
    t0.rgb*=t0.a;t1.rgb*=t1.a;t2.rgb*=t2.a;t3.rgb*=t3.a;
@@ -198,7 +269,7 @@ export function directionalMaterial(bake,depthMode={value:0}){
   `);
   s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_end>','#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * 0.13;');
  };
- mat.customProgramCacheKey=()=> 'directional-tree-filtered-ab-v6';return mat;
+ mat.customProgramCacheKey=()=> 'directional-tree-filtered-ab-v7';return mat;
 }
 export function proceduralBakeObject(p,photo){
  const o=new T.Group(),wood=new T.MeshBasicMaterial({color:0x786b52,toneMapped:false}),leaf=new T.MeshBasicMaterial({map:photo,alphaTest:.35,side:T.DoubleSide,toneMapped:false});
