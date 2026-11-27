@@ -108,6 +108,23 @@ export function reliefCards(bake){
  return {geometry,sampled,total};
 }
 // Disconnected, source-depth patches avoid stretching a continuous plane over empty canopy.
+// Multi-view source geometry consistency, excludes four diagonal horizon
+// holdouts. Mask neighborhood tolerates fine needles and pixel quantization.
+export function patchConsistency(bake,center,right,up,half){
+ const [width]=bake.atlas,inside=TILE-2*GUTTER,c=new T.Vector3(...bake.center),d=new T.Vector3(),p=new T.Vector3();let ok=0,total=0;
+ for(const [a,e] of [[0,1],[2,1],[4,1],[6,1],[0,2],[2,2],[4,2],[6,2],[0,3],[2,3],[4,3],[6,3]]){
+  const yaw=a*2*Math.PI/AZIMUTHS,pitch=ELEVATIONS[e]*Math.PI/180;
+  const r=new T.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),n=new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)),u=new T.Vector3().crossVectors(n,r);
+  for(const [x,y] of [[0,0],[-.65,0],[.65,0],[0,-.65],[0,.65]]){
+   p.copy(center).addScaledVector(right,x*half).addScaledVector(up,y*half);d.copy(p).sub(c);
+   const px=Math.round((d.dot(r)/bake.extent*.5+.5)*(inside-1)),py=Math.round((d.dot(u)/bake.extent*.5+.5)*(inside-1));total++;
+   if(px<0||py<0||px>=inside||py>=inside)continue;
+   let hit=false;for(let yy=-3;yy<=3&&!hit;yy+=3)for(let xx=-3;xx<=3;xx+=3)if(px+xx>=0&&px+xx<inside&&py+yy>=0&&py+yy<inside&&bake.depthBytes[(e*TILE+GUTTER+py+yy)*width+a*TILE+GUTTER+px+xx]){hit=true;break}
+   ok+=Number(hit);
+  }
+ }
+ return ok/total;
+}
 export function sourcePatches(bake,patchScale=1,profile={}){
  const grid=profile.grid??12,step=profile.step??2,minimum=profile.minimum??3,voxelScale=profile.voxelScale??.8;
  if(![12,20,24,28,32].includes(grid)||![1,2].includes(step)||minimum<1||voxelScale<.5||voxelScale>1.2)throw Error('invalid patch profile');
@@ -131,7 +148,9 @@ export function sourcePatches(bake,patchScale=1,profile={}){
   const center=new T.Vector3(...bake.center).addScaledVector(right,((u0+u1)-1)*bake.extent).addScaledVector(up,((v0+v1)-1)*bake.extent).addScaledVector(normal,depth);
   // Sparse lower trunk patches are retained; reward well-supported foliage and coherent depth.
   const score=profile.moreViews?ds.length/(1+spread*.035)+(center.y<bake.center[1]*.8?3:0):ds.length/(1+spread*.015)+(center.y<bake.center[1]*.8?12:0);
-  candidates.push({a,e,u0,u1,v0,v1,center,right,up,normal,score,spread,samples:ds.length});
+  const coherence=profile.consistency?patchConsistency(bake,center,right,up,bake.extent/grid):1;
+  if(profile.consistency&&coherence<profile.consistency)continue;
+  candidates.push({a,e,u0,u1,v0,v1,center,right,up,normal,score:score*(.25+.75*coherence),spread,samples:ds.length});
  }
  candidates.sort((a,b)=>b.score-a.score);
  const selected=[],voxels=new Map(),cell=2*bake.extent/grid*voxelScale;
@@ -158,8 +177,11 @@ export function sourcePatches(bake,patchScale=1,profile={}){
 }
 // Actual source alpha mask vs actual proxy rendered alpha at matched orthographic views.
 export function compareSourceSilhouette(renderer,bake,geometry,texture=bake.texture,side=T.DoubleSide,alphaTest=.28,views=[[0,1],[2,1],[4,1],[6,1],[1,2],[3,3]]){
- const inside=TILE-2*GUTTER,[width]=bake.atlas,target=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false}),scene=new T.Scene(),material=new T.MeshBasicMaterial({map:texture,alphaTest,side,toneMapped:false});
- scene.add(new T.Mesh(geometry,material));
+ const material=new T.MeshBasicMaterial({map:texture,alphaTest,side,toneMapped:false}),object=new T.Mesh(geometry,material);
+ try{return compareSourceObjectSilhouette(renderer,bake,object,views)}finally{material.dispose()}
+}
+export function compareSourceObjectSilhouette(renderer,bake,object,views=[[0,1],[2,1],[4,1],[6,1],[1,2],[3,3]]){
+ const inside=TILE-2*GUTTER,[width]=bake.atlas,target=new T.WebGLRenderTarget(inside,inside,{depthBuffer:true,stencilBuffer:false}),scene=new T.Scene();scene.add(object);
  const camera=new T.OrthographicCamera(-bake.extent,bake.extent,bake.extent,-bake.extent,20-bake.depthRange,20+bake.depthRange),center=new T.Vector3(...bake.center),results=[];
  const prev=renderer.getRenderTarget(),clear=renderer.getClearColor(new T.Color()),alpha=renderer.getClearAlpha(),auto=renderer.autoClear,shadow=renderer.shadowMap.enabled,xr=renderer.xr.enabled;
  try{
@@ -177,7 +199,7 @@ export function compareSourceSilhouette(renderer,bake,geometry,texture=bake.text
    if(!source||!proxy||!union)throw Error('empty silhouette comparison');
    results.push({azimuth:a,elevation:e,source,proxy,intersection,union,iou:intersection/union,areaRatio:proxy/source});
   }
- }finally{renderer.setRenderTarget(prev);renderer.setClearColor(clear,alpha);renderer.autoClear=auto;renderer.shadowMap.enabled=shadow;renderer.xr.enabled=xr;target.dispose();material.dispose()}
+ }finally{renderer.setRenderTarget(prev);renderer.setClearColor(clear,alpha);renderer.autoClear=auto;renderer.shadowMap.enabled=shadow;renderer.xr.enabled=xr;target.dispose();scene.remove(object)}
  return results;
 }
 // Reconstruct the original binary alpha mask from the matched depth pass.
@@ -211,15 +233,15 @@ export function calibratedSourcePatches(renderer,bake,additional=false){
  const {texture,covered}=sourceMaskTexture(bake),trials=[];
  let best=null,score=-Infinity;
  try{
-  const profiles=additional?[[1,false,20],[1,false,24],[1,false,28],[1,false,32],[.95,false,24],[.9,false,28],[1,true,24],[1,false,12]]:[[1,false,12],[.9,false,12],[.8,false,12],[1,true,12]];
-  for(const [scale,frontOnly,grid] of profiles){
-   const profile=grid===12?{}:{grid,step:1,minimum:2,voxelScale:.85,moreViews:true};
-   const candidate=sourcePatches(bake,scale,profile),side=frontOnly?T.FrontSide:T.DoubleSide;
+  const profiles=additional?[[1,false,24,.35],[1,false,28,.4],[1,false,32,.45],[1,false,32,.55],[.95,false,28,.4],[1,true,24,.35],[1,false,24,0],[1,false,12,0]]:[[1,false,12],[.9,false,12],[.8,false,12],[1,true,12]];
+  for(const [scale,frontOnly,grid,consistency=0] of profiles){
+   const profile=grid===12?{}:{grid,step:1,minimum:2,voxelScale:.85,moreViews:true,consistency};
+   let candidate;try{candidate=sourcePatches(bake,scale,profile)}catch(e){trials.push({scale,frontOnly,grid,consistency,error:String(e),pass:false});continue}const side=frontOnly?T.FrontSide:T.DoubleSide;
    candidate.silhouette=compareSourceSilhouette(renderer,bake,candidate.geometry,texture,side,.5);
    const pass=silhouettePass(candidate.silhouette),mean=candidate.silhouette.reduce((n,s)=>n+s.iou,0)/6;
    const violation=candidate.silhouette.reduce((n,s)=>n+Math.max(0,s.areaRatio-1.55,.65-s.areaRatio)+Math.max(0,.4-s.iou),0);
    const rank=(pass?10:0)+mean-violation;
-   trials.push({scale,frontOnly,grid,triangles:candidate.geometry.index.count/3,mean,pass,views:candidate.silhouette});
+   trials.push({scale,frontOnly,grid,consistency,triangles:candidate.geometry.index.count/3,mean,pass,views:candidate.silhouette});
    if(rank>score){best?.geometry.dispose();best={...candidate,scale,frontOnly,grid};score=rank}else candidate.geometry.dispose();
    if(pass)break;
   }

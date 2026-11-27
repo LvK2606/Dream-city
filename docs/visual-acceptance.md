@@ -63,3 +63,6 @@ Require independent pine model validation and decode, same source at all LODs, t
 
 ## v0.4.10.11
 Retain pine and broadleaf six+four silhouette limits and all previous render budgets. Validate natural LOD0 at closer camera of original ID200, four independent pine near captures, 36 total and no missing files. Do not force LOD state or relax thresholds.
+
+## v0.4.10.12
+Pine may use actual source geometry or consistency-filtered depth patches, but either must pass same ten-view shape gate, same 1536 triangle cap and same maximum two instanced material batches. Require both means explicitly, all prior frame budgets and 36 exact-frame captures. Report all failed profiles; do not infer visual quality from test success.

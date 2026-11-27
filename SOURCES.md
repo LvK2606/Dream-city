@@ -74,3 +74,6 @@ Pine Sapling Small, https://polyhaven.com/a/pine_sapling_small, CC0; Rico Cillie
 
 ## v0.4.10.11
 Original fine-grid depth patch sampling and camera QA correction. Sources unchanged.
+
+## v0.4.10.12
+Existing Meshoptimizer MIT v0.24 attribute simplification, original source grouping and spatial subset, original multi-view consistency ranking. No new dependency.
