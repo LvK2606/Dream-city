@@ -60,3 +60,6 @@ Require 49 actual hemisphere views per species plus 32 prior depth views, defaul
 
 ## v0.4.10.10
 Require independent pine model validation and decode, same source at all LODs, ten silhouette views for each external tree, 120–180 deterministic outer hillside infill trees, prior 32 captures and budgets unchanged. Compare density and source variety to v0.4.10.9. No scan or physical GPU claim.
+
+## v0.4.10.11
+Retain pine and broadleaf six+four silhouette limits and all previous render budgets. Validate natural LOD0 at closer camera of original ID200, four independent pine near captures, 36 total and no missing files. Do not force LOD state or relax thresholds.

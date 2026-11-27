@@ -71,3 +71,6 @@ Technique reference: Anderson Mancini, ektogamat/octahedral-impostor-component, 
 
 ## v0.4.10.10
 Pine Sapling Small, https://polyhaven.com/a/pine_sapling_small, CC0; Rico Cilliers (model), Rob Tuytel (photography). Source authored model, scan not verified. Build manifest must validate exact download and optimized GLB. Original hillside infill.
+
+## v0.4.10.11
+Original fine-grid depth patch sampling and camera QA correction. Sources unchanged.

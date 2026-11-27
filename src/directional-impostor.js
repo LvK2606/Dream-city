@@ -108,19 +108,21 @@ export function reliefCards(bake){
  return {geometry,sampled,total};
 }
 // Disconnected, source-depth patches avoid stretching a continuous plane over empty canopy.
-export function sourcePatches(bake,patchScale=1){
+export function sourcePatches(bake,patchScale=1,profile={}){
+ const grid=profile.grid??12,step=profile.step??2,minimum=profile.minimum??3,voxelScale=profile.voxelScale??.8;
+ if(![12,20,24,28,32].includes(grid)||![1,2].includes(step)||minimum<1||voxelScale<.5||voxelScale>1.2)throw Error('invalid patch profile');
  if(!Number.isFinite(patchScale)||patchScale<.7||patchScale>1)throw Error('invalid patch scale');
- const [width,height]=bake.atlas,inside=TILE-2*GUTTER,grid=12,maxPatches=768,candidates=[];
+ const [width,height]=bake.atlas,inside=TILE-2*GUTTER,maxPatches=768,candidates=[];
  if(!bake.depthBytes||bake.depthBytes.length!==width*height)throw Error('missing source depth');
- const views=Array.from({length:8},(_,a)=>({a,e:1})).concat([{a:0,e:2},{a:2,e:2},{a:4,e:2},{a:6,e:2},{a:0,e:3}]);
+ const views=Array.from({length:8},(_,a)=>({a,e:1})).concat(profile.moreViews?Array.from({length:8},(_,a)=>({a,e:2})).concat([{a:0,e:3},{a:2,e:3},{a:4,e:3},{a:6,e:3}]):[{a:0,e:2},{a:2,e:2},{a:4,e:2},{a:6,e:2},{a:0,e:3}]);
  for(const {a,e} of views)for(let y=0;y<grid;y++)for(let x=0;x<grid;x++){
   const u0=x/grid,u1=(x+1)/grid,v0=y/grid,v1=(y+1)/grid;
   const ds=[];
-  for(let yy=Math.floor(v0*inside);yy<Math.floor(v1*inside);yy+=2)
-   for(let xx=Math.floor(u0*inside);xx<Math.floor(u1*inside);xx+=2){
+  for(let yy=Math.floor(v0*inside);yy<Math.floor(v1*inside);yy+=step)
+   for(let xx=Math.floor(u0*inside);xx<Math.floor(u1*inside);xx+=step){
     const d=bake.depthBytes[(e*TILE+GUTTER+yy)*width+a*TILE+GUTTER+xx];if(d)ds.push(d);
    }
-  if(ds.length<3)continue;
+  if(ds.length<minimum)continue;
   ds.sort((a,b)=>a-b);
   const median=ds[Math.floor(ds.length*.5)],spread=ds[Math.floor(ds.length*.9)]-ds[Math.floor(ds.length*.1)];
   const depth=Math.max(-bake.extent,Math.min(bake.extent,(median/255*2-1)*bake.depthRange));
@@ -128,11 +130,11 @@ export function sourcePatches(bake,patchScale=1){
   const right=new T.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),normal=new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)),up=new T.Vector3().crossVectors(normal,right);
   const center=new T.Vector3(...bake.center).addScaledVector(right,((u0+u1)-1)*bake.extent).addScaledVector(up,((v0+v1)-1)*bake.extent).addScaledVector(normal,depth);
   // Sparse lower trunk patches are retained; reward well-supported foliage and coherent depth.
-  const score=ds.length/(1+spread*.015)+(center.y<bake.center[1]*.8?12:0);
+  const score=profile.moreViews?ds.length/(1+spread*.035)+(center.y<bake.center[1]*.8?3:0):ds.length/(1+spread*.015)+(center.y<bake.center[1]*.8?12:0);
   candidates.push({a,e,u0,u1,v0,v1,center,right,up,normal,score,spread,samples:ds.length});
  }
  candidates.sort((a,b)=>b.score-a.score);
- const selected=[],voxels=new Map(),cell=2*bake.extent/grid*.8;
+ const selected=[],voxels=new Map(),cell=2*bake.extent/grid*voxelScale;
  for(const p of candidates){
   const key=p.center.toArray().map(v=>Math.floor(v/cell)).join(',');
   const normals=voxels.get(key)??[];
@@ -209,14 +211,16 @@ export function calibratedSourcePatches(renderer,bake,additional=false){
  const {texture,covered}=sourceMaskTexture(bake),trials=[];
  let best=null,score=-Infinity;
  try{
-  for(const [scale,frontOnly] of (additional?[[1,false],[.9,false],[.8,false],[1,true],[.9,true],[.8,true],[.7,false]]:[[1,false],[.9,false],[.8,false],[1,true]])){
-   const candidate=sourcePatches(bake,scale),side=frontOnly?T.FrontSide:T.DoubleSide;
+  const profiles=additional?[[1,false,20],[1,false,24],[1,false,28],[1,false,32],[.95,false,24],[.9,false,28],[1,true,24],[1,false,12]]:[[1,false,12],[.9,false,12],[.8,false,12],[1,true,12]];
+  for(const [scale,frontOnly,grid] of profiles){
+   const profile=grid===12?{}:{grid,step:1,minimum:2,voxelScale:.85,moreViews:true};
+   const candidate=sourcePatches(bake,scale,profile),side=frontOnly?T.FrontSide:T.DoubleSide;
    candidate.silhouette=compareSourceSilhouette(renderer,bake,candidate.geometry,texture,side,.5);
    const pass=silhouettePass(candidate.silhouette),mean=candidate.silhouette.reduce((n,s)=>n+s.iou,0)/6;
    const violation=candidate.silhouette.reduce((n,s)=>n+Math.max(0,s.areaRatio-1.55,.65-s.areaRatio)+Math.max(0,.4-s.iou),0);
    const rank=(pass?10:0)+mean-violation;
-   trials.push({scale,frontOnly,mean,pass,views:candidate.silhouette});
-   if(rank>score){best?.geometry.dispose();best={...candidate,scale,frontOnly};score=rank}else candidate.geometry.dispose();
+   trials.push({scale,frontOnly,grid,triangles:candidate.geometry.index.count/3,mean,pass,views:candidate.silhouette});
+   if(rank>score){best?.geometry.dispose();best={...candidate,scale,frontOnly,grid};score=rank}else candidate.geometry.dispose();
    if(pass)break;
   }
   if(!best)throw Error('missing source patch candidate');
