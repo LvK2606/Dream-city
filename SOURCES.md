@@ -77,3 +77,7 @@ Original fine-grid depth patch sampling and camera QA correction. Sources unchan
 
 ## v0.4.10.12
 Existing Meshoptimizer MIT v0.24 attribute simplification, original source grouping and spatial subset, original multi-view consistency ranking. No new dependency.
+
+
+## XCity research only (0.4.10.13)
+See [research and acceptance](docs/XCITY_RESEARCH.md). No source or assets imported; license not established.

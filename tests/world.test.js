@@ -108,3 +108,22 @@ test('fine needle-tree patch profile remains under original geometry cap',()=>{c
 import {allocateTriangleBudgets,spatialTriangleSubset} from '../src/direct-source-lod.js';
 test('source mesh allocation preserves per-material and total triangle caps',()=>{assert.deepEqual(allocateTriangleBudgets([5,10],20),[5,10]);const a=allocateTriangleBudgets([1000,62663]);assert.equal(a.reduce((n,v)=>n+v,0),1536);assert.ok(a.every(n=>n>0));assert.throws(()=>allocateTriangleBudgets([0,2]),/invalid/)});
 test('spatial triangle subset retains original triangles and a bounded index count',()=>{const p=[],ix=[];for(let i=0;i<60;i++){p.push(i,0,0,i+.5,1,0,i+.5,0,1);ix.push(i*3,i*3+1,i*3+2)}const out=spatialTriangleSubset(new Float32Array(p),new Uint32Array(ix),12);assert.equal(out.length,36);for(let i=0;i<out.length;i+=3)assert.ok(out[i]%3===0&&out[i+1]===out[i]+1&&out[i+2]===out[i]+2);assert.ok(new Set(out).size===36)});
+
+import {RIVER_SURFACE_Y,TERRAIN_OFFSET,RIVER_SURFACE_WIDTH,bankWetness,createGroundContact,groundDetailColor} from '../src/ground-detail.js';
+test('river surface overlaps terrain above the waterline on both developed banks',()=>{
+  for(const z of [-120,-60,0,60,120])for(const sign of [-1,1]){
+    assert.ok(groundHeight(sign*RIVER_SURFACE_WIDTH/2,z)+TERRAIN_OFFSET>RIVER_SURFACE_Y);
+    assert.ok(groundHeight(sign*17,z)+TERRAIN_OFFSET<RIVER_SURFACE_Y);
+  }
+  assert.ok(bankWetness(20,RIVER_SURFACE_Y)>0.9);
+  assert.equal(bankWetness(40,RIVER_SURFACE_Y),0);
+  assert.equal(bankWetness(20,RIVER_SURFACE_Y+3),0);
+});
+test('ground contact lookup is bounded, smooth, symmetric and local',()=>{
+  const a=createGroundContact([{x:15,z:0,w:8,d:8}]);
+  assert.equal(a(15,0),1);assert.equal(a(20,0),1);
+  assert.ok(a(22,0)>0&&a(22,0)<1);assert.equal(a(24,0),0);
+  assert.equal(a(8,0),a(22,0));assert.equal(a(100,100),0);
+  assert.deepEqual(groundDetailColor([1,.8,.5],0,0),[1,.8,.5]);
+  assert.ok(groundDetailColor([1,.8,.5],1,1).every((v,i)=>v>0&&v<[1,.8,.5][i]));
+});

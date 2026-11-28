@@ -14,10 +14,11 @@ const check=(ok,msg)=>{if(!ok)failures.push(msg)};
 function validate(s,name,cam,light,high){
  const k=name+'/'+cam+'/'+light+(high?'/high':''),v=s.vegetation,p=s.passes.window;
  const ck=(ok,msg)=>check(ok,k+' '+msg);
- ck(s.version==='0.4.10.12','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
+ ck(s.version==='0.4.10.13','version');if(process.env.EXPECT_BUILD_SHA)ck(s.buildSha===process.env.EXPECT_BUILD_SHA,'SHA');
  ck(s.architecture.variants>=16&&s.architecture.volumes>s.buildings&&s.architecture.buildings===s.buildings,'architecture massing');
  ck(s.streets.markings>100&&s.streets.furniture===6&&s.streets.signals>20&&s.streets.lanes>30&&s.cars===100,'street detail and traffic');
  ck(s.landscape.parks===4&&s.landscape.paths===12&&s.landscape.rocks>=40&&s.landscape.triangles<=2240&&s.landscape.drawUpperBound===1,'landscape kit');
+ ck(s.landscape.groundDetail?.wetVertices>0&&s.landscape.groundDetail?.contactVertices>0&&s.landscape.groundDetail?.waterWidth===44&&s.landscape.groundDetail?.waterY===-0.65&&s.landscape.groundDetail?.addedDrawCalls===0,'ground detail geometry and coverage');
  ck(s.rendering.profile===light&&s.rendering.nightSky===(light==='night')&&s.rendering.roofEmission.every(v=>v===0)&&s.rendering.dpr>0&&s.rendering.dpr<=(high?1.6:name==='mobile'?.75:1.15),'lighting and resolution profile');
  ck(s.staticBatch.strategy==='coarse-lightweight-static-detail-v1'&&s.staticBatch.batches===s.chunks&&s.staticBatch.triangles>1000,'static batching inventory');
  ck(s.ready&&s.buildings>150&&s.trees>500,'population');ck(s.facadeQuads===s.facadeWindows&&s.facadeWindows>3000&&s.facadeStyles>=12&&s.chunks>20,'facades');

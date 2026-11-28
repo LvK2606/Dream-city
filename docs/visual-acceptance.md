@@ -66,3 +66,7 @@ Retain pine and broadleaf six+four silhouette limits and all previous render bud
 
 ## v0.4.10.12
 Pine may use actual source geometry or consistency-filtered depth patches, but either must pass same ten-view shape gate, same 1536 triangle cap and same maximum two instanced material batches. Require both means explicitly, all prior frame budgets and 36 exact-frame captures. Report all failed profiles; do not infer visual quality from test success.
+
+
+## v0.4.10.13 candidate
+Maintain all 36 capture and prior budget gates. See [XCity research](XCITY_RESEARCH.md); require positive bank/contact vertex coverage and actual river surface dimensions, compare identical camera captures and measure hardware. HOLD until evidence.
