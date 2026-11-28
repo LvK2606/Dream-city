@@ -1,33 +1,146 @@
-name: Visual QA
-on: [push, workflow_dispatch]
+name: XCity migration and WebGL
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/visual.yml']
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: dream-city-xcity-main
+  cancel-in-progress: false
 jobs:
-  browser:
+  import:
     runs-on: ubuntu-24.04
-    timeout-minutes: 22
-    env:
-      REQUIRE_PHOTO_ASSETS: '1'
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.migrate.outputs.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          persist-credentials: false
-      - run: npm install --no-audit --no-fund
-      - run: npm test && npm run build
-      - run: npm install --no-save --package-lock=false playwright@1.56.1 && npx playwright install --with-deps chromium
-      - run: |
-          npm run preview > /tmp/dream-city.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://localhost:4173/ && break; sleep 1; done
-          EXPECT_BUILD_SHA="$GITHUB_SHA" node tests/browser.mjs
-      - name: Production browser QA (exact build SHA)
-        if: github.ref == 'refs/heads/main'
-        env:
-          BASE_URL: https://dream-city-lime.vercel.app/
-          QA_DIR: qa/production
-        run: EXPECT_BUILD_SHA="$GITHUB_SHA" node tests/browser.mjs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
+          ref: main
+      - name: Replace old project with authorized upstream snapshot
+        id: migrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=d78f3f4c3f868084b5b9284d644ed302229115b3
+          if test -f docs/DREAM_CITY_UPSTREAM.md && grep -q "$SOURCE" docs/DREAM_CITY_UPSTREAM.md; then
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          upstream=$(mktemp -d)
+          git -C "$upstream" init -q
+          git -C "$upstream" remote add origin https://github.com/nikvn2105/XCity.git
+          git -C "$upstream" fetch --depth=1 origin "$SOURCE"
+          GIT_LFS_SKIP_SMUDGE=1 git -C "$upstream" checkout --detach "$SOURCE"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$SOURCE"
+          git -C "$upstream" lfs pull
+          git -C "$upstream" lfs fsck
+          # Delete every tracked legacy path except the migration workflow and build helpers.
+          while IFS= read -r -d '' p; do
+            case "$p" in
+              .github/workflows/visual.yml|.github/dream-city-webgl/*) continue ;;
+            esac
+            rm -f -- "$p"
+          done < <(git ls-files -z)
+          git -C "$upstream" archive "$SOURCE" | tar -x -C .
+          # Archive upstream workflows as non-executable references: never run their releases or cleanup.
+          mkdir -p docs/upstream-workflows
+          for f in .github/workflows/*.yml; do
+            if [[ "$f" != ".github/workflows/visual.yml" ]]; then
+              mv "$f" docs/upstream-workflows/
+            fi
+          done
+          # Preserve real LFS content as regular Git files; verify every pointer's SHA256.
+          python3 - "$upstream" <<'PY'
+          import hashlib, pathlib, subprocess, sys
+          root=pathlib.Path(sys.argv[1])
+          for line in subprocess.check_output(['git','-C',str(root),'lfs','ls-files','-n'],text=True).splitlines():
+              p=pathlib.Path(line)
+              pointer=subprocess.check_output(['git','-C',str(root),'show','HEAD:'+line],text=True)
+              expected=next(x.split('sha256:',1)[1] for x in pointer.splitlines() if x.startswith('oid sha256:'))
+              data=(root/p).read_bytes()
+              assert hashlib.sha256(data).hexdigest()==expected, line
+              p.write_bytes(data)
+          PY
+          # Store small resolved assets directly instead of requiring a second LFS remote.
+          sed -i 's/filter=lfs diff=lfs merge=lfs -text/-text/g' .gitattributes
+          cp .github/dream-city-webgl/Build.cs Assets/Editor/DreamCityWebGLBuild.cs
+          cp .github/dream-city-webgl/vercel.json vercel.json
+          printf '# Dream City / XCity upstream\n\nSource: https://github.com/nikvn2105/XCity\nPinned commit: %s\nImported with user-confirmed permission from the publisher. Preserve original credits and asset licenses. Upstream workflows are archived as references. WebGL adaptation is separate.\n' "$SOURCE" > docs/DREAM_CITY_UPSTREAM.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          # Verify all upstream paths against the staged Git blobs, except explicitly adapted files.
+          python3 - "$upstream" <<'PY'
+          import pathlib, subprocess, sys
+          root=sys.argv[1]
+          rows=subprocess.check_output(['git','-C',root,'ls-tree','-r','-z','HEAD']).split(b'\0')
+          lfs=set(subprocess.check_output(['git','-C',root,'lfs','ls-files','-n'],text=True).splitlines())
+          count=0
+          for row in filter(None,rows):
+              meta,path=row.decode().split('\t',1)
+              if path=='.gitattributes' or path in lfs: continue
+              dest='docs/upstream-workflows/'+path.rsplit('/',1)[1] if path.startswith('.github/workflows/') else path
+              expected=meta.split()[2]
+              actual=subprocess.check_output(['git','rev-parse',':'+dest],text=True).strip()
+              assert expected==actual, (path,expected,actual)
+              count+=1
+          print('Verified unchanged upstream blobs:',count,'resolved LFS files:',len(lfs))
+          PY
+          git commit -m "Replace Dream City with XCity at $SOURCE; add WebGL port pipeline"
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  simulation:
+    needs: import
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          name: dream-city-render-captures
-          path: qa/
-          if-no-files-found: ignore
+          ref: ${{ needs.import.outputs.sha }}
+          persist-credentials: false
+      - run: dotnet test Tests/XCity.Simulation.Tests/XCity.Simulation.Tests.csproj --configuration Release
+  webgl:
+    needs: [import, simulation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ needs.import.outputs.sha }}
+          persist-credentials: false
+      - name: Check Unity activation configuration
+        env:
+          HAS_LICENSE: ${{ secrets.UNITY_LICENSE != '' }}
+          HAS_SERIAL: ${{ secrets.UNITY_SERIAL != '' && secrets.UNITY_EMAIL != '' && secrets.UNITY_PASSWORD != '' }}
+        run: |
+          if [[ "$HAS_LICENSE" != true && "$HAS_SERIAL" != true ]]; then
+            echo "::error::Unity activation is not configured. Set UNITY_LICENSE or Unity serial/email/password in repository Actions secrets."
+            exit 1
+          fi
+      - name: Build Unity WebGL
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 2022.3.47f1
+          targetPlatform: WebGL
+          buildMethod: DreamCityWebGLBuild.Build
+          versioning: None
+          allowDirtyBuild: true
+      - name: Verify real WebGL output
+        run: |
+          test -s webgl/index.html
+          test -n "$(find webgl/Build -name '*.wasm' -print -quit)"
+          test -n "$(find webgl/Build -name '*.data' -print -quit)"
+          find webgl -type f -printf '%p %s bytes\n'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dream-city-webgl
+          path: webgl/
+          if-no-files-found: error

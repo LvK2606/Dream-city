@@ -1,0 +1,17 @@
+{
+  "framework": null,
+  "installCommand": "echo Static Unity WebGL build",
+  "buildCommand": "test -s webgl/index.html && test -n \"$(find webgl/Build -name '*.wasm' -print -quit)\" ",
+  "outputDirectory": "webgl",
+  "headers": [
+    {
+      "source": "/Build/(.*)\\.wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ]
+    }
+  ]
+}
