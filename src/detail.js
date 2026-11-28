@@ -1,8 +1,0 @@
-import * as T from 'three';
-export function chunkKey(minX,minZ,maxX,maxZ,size=64){if(maxX-minX>size||maxZ-minZ>size)return 'long';return Math.floor((minX+maxX)/2/size)+','+Math.floor((minZ+maxZ)/2/size)}
-// Original low-budget beveled vehicle silhouette: longitudinal profile extruded across width.
-function profile(points,width,bevel){const s=new T.Shape();points.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new T.ExtrudeGeometry(s,{depth:width-2*bevel,bevelEnabled:true,bevelSize:bevel,bevelThickness:bevel,bevelSegments:2,steps:1,curveSegments:1});g.translate(0,0,-(width-2*bevel)/2);g.rotateY(Math.PI/2);g.computeBoundingBox();return g}
-export function carShell(){return profile([[-1.62,-.15],[-1.66,.10],[-1.38,.28],[.96,.31],[1.58,.21],[1.64,-.12],[1.42,-.21],[-1.42,-.21]],1.53,.06)}
-export function carCabin(){return profile([[-.99,-.08],[-.59,.41],[.37,.41],[.91,-.08]],1.23,.055)}
-export function carWheel(){const g=new T.CylinderGeometry(.275,.275,.20,12,1);g.rotateZ(Math.PI/2);return g}
-export function gableRoof(w,d,h,turn=false){const a=w/2,b=d/2,vertices=[-a,0,-b,a,0,-b,0,h,-b,-a,0,b,0,h,b,a,0,b,-a,0,-b,0,h,-b,0,h,b,-a,0,-b,0,h,b,-a,0,b,a,0,-b,a,0,b,0,h,b,a,0,-b,0,h,b,0,h,-b];for(let i=0;i<vertices.length;i+=9){for(let j=0;j<3;j++){const t=vertices[i+3+j];vertices[i+3+j]=vertices[i+6+j];vertices[i+6+j]=t}}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(Array.from({length:vertices.length/3},(_,i)=>[i%3===1?1:0,i%3===2?1:0]).flat(),2));g.setIndex(Array.from({length:vertices.length/3},(_,i)=>i));g.computeVertexNormals();if(turn){g.scale(d/w,1,w/d);g.rotateY(Math.PI/2)}return g}

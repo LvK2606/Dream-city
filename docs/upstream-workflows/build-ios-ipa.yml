@@ -1,0 +1,155 @@
+name: Build XCity iOS (.ipa)
+
+on:
+  push:
+    branches: [ main ]
+    tags: ['v*-demo.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-unity-ios:
+    name: Build Unity Xcode Project
+    runs-on: ubuntu-latest
+    outputs:
+      demo-version: ${{ steps.demo.outputs.version }}
+      xcode-artifact-id: ${{ steps.upload-xcode.outputs.artifact-id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Determine demo version
+        id: demo
+        shell: bash
+        run: |
+          version="$(bash .github/scripts/demo-version.sh)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-2022.3.47f1-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-2022.3.47f1-iOS-
+
+      - name: Build Unity project for iOS
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          unityVersion: 2022.3.47f1
+          buildName: XCity
+          buildsPath: build
+          versioning: None
+
+      - name: Archive Xcode project with file modes and symlinks
+        shell: bash
+        run: |
+          test -f build/iOS/XCity/Unity-iPhone.xcodeproj/project.pbxproj
+          tar -cf XCity-XcodeProject.tar -C build/iOS XCity
+
+      - name: Upload Xcode project artifact
+        id: upload-xcode
+        uses: actions/upload-artifact@v4
+        with:
+          name: XCity-XcodeProject
+          path: XCity-XcodeProject.tar
+          if-no-files-found: error
+          retention-days: 3
+
+  package-unsigned-ipa:
+    name: Compile & Package Unsigned IPA
+    needs: build-unity-ios
+    runs-on: macos-15
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Download Xcode project
+        uses: actions/download-artifact@v4
+        with:
+          name: XCity-XcodeProject
+          path: ios-build
+
+      - name: Extract Xcode project
+        shell: bash
+        run: tar -xf ios-build/XCity-XcodeProject.tar -C ios-build
+
+      # ProMotion iPhones cap apps at 60 Hz unless Info.plist opts in; the in-game 120 FPS option needs this.
+      - name: Allow 120 Hz on ProMotion iPhones
+        shell: bash
+        run: |
+          plist=ios-build/XCity/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CADisableMinimumFrameDurationOnPhone bool true" "$plist" ||
+            /usr/libexec/PlistBuddy -c "Set :CADisableMinimumFrameDurationOnPhone true" "$plist"
+
+      - name: Build unsigned .app with Xcode 16.4
+        shell: bash
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+        run: |
+          xcodebuild -version
+          cd ios-build/XCity
+          xcodebuild \
+            -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            ARCHS=arm64 \
+            -derivedDataPath "$GITHUB_WORKSPACE/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Verify and package unsigned IPA
+        shell: bash
+        env:
+          DEMO_VERSION: ${{ needs.build-unity-ios.outputs.demo-version }}
+        run: |
+          shopt -s nullglob
+          apps=("$GITHUB_WORKSPACE"/DerivedData/Build/Products/Release-iphoneos/*.app)
+          if [[ ${#apps[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one Release-iphoneos app"
+            exit 1
+          fi
+          app="${apps[0]}"
+          plist="$app/Info.plist"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = com.nikstudiovn.xcity
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$plist")" = 14.0
+          test -x "$app/$executable"
+          test -x "$app/Frameworks/UnityFramework.framework/UnityFramework"
+          lipo "$app/$executable" -verify_arch arm64
+          lipo "$app/Frameworks/UnityFramework.framework/UnityFramework" -verify_arch arm64
+
+          mkdir -p ipa-out/Payload
+          ditto "$app" "ipa-out/Payload/$(basename "$app")"
+          ipa="XCity-$DEMO_VERSION-unsigned.ipa"
+          ditto -c -k --keepParent ipa-out/Payload "$ipa"
+          unzip -tq "$ipa"
+
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XCity-unsigned-ipa
+          path: XCity-${{ needs.build-unity-ios.outputs.demo-version }}-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      # The ~200 MB Xcode project is only a hand-off between the two jobs; free the artifact storage once the IPA is up.
+      - name: Delete intermediate Xcode project artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/${{ needs.build-unity-ios.outputs.xcode-artifact-id }}"

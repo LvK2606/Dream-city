@@ -1,0 +1,11 @@
+*.fbx -text
+*.obj -text
+*.blend -text
+*.png -text
+*.jpg -text
+*.tga -text
+*.psd -text
+*.wav -text
+*.mp3 -text
+*.ogg -text
+*.unitypackage -text
