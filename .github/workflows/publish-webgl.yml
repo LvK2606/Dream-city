@@ -1,0 +1,82 @@
+name: Verify and publish XCity WebGL
+on:
+  workflow_run:
+    workflows: ["XCity migration and WebGL"]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: dream-city-webgl-publish
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_sha == '0f6149acc3d1ae8ad3ed46a2ab2d2a0cdf708f99'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: dream-city-webgl
+          path: webgl
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Validate payload
+        run: |
+          test -s webgl/index.html
+          test -n "$(find webgl/Build -name '*.wasm' -print -quit)"
+          test -n "$(find webgl/Build -name '*.data' -print -quit)"
+          test -z "$(find webgl -type l -print -quit)"
+          test -z "$(find webgl -type f -size +95M -print -quit)"
+      - run: npm install --no-save --package-lock=false playwright@1.56.1 && npx playwright install --with-deps chromium
+      - name: Real browser startup smoke test
+        run: |
+          python3 -m http.server 4173 --directory webgl >/tmp/webgl-server.log 2>&1 &
+          node --input-type=module <<'JS'
+          import {chromium} from 'playwright';
+          const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
+          try{
+            const page=await browser.newPage({viewport:{width:1280,height:720}});
+            const errors=[],loads=new Set();
+            page.on('pageerror',e=>errors.push(e.message));
+            page.on('dialog',async d=>{errors.push(d.message());await d.dismiss()});
+            page.on('response',r=>{if(r.ok()&&r.url().endsWith('.wasm'))loads.add('wasm');if(r.ok()&&r.url().endsWith('.data'))loads.add('data')});
+            await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+            await page.waitForFunction(()=>{const c=document.querySelector('#unity-canvas'),l=document.querySelector('#unity-loading-bar');return c&&c.width>0&&c.height>0&&l&&l.style.display==='none'}, null, {timeout:180000});
+            await page.waitForTimeout(3000);
+            if(errors.length||!loads.has('wasm')||!loads.has('data'))throw Error(JSON.stringify({errors,loads:[...loads]}));
+            await page.screenshot({path:'webgl-startup.png'});
+          }finally{await browser.close()}
+          JS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-webgl
+          path: webgl/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: webgl-startup-evidence
+          path: webgl-startup.png
+          if-no-files-found: error
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: verified-webgl
+          path: webgl
+      - name: Commit only verified WebGL build output
+        run: |
+          set -euo pipefail
+          # Fail closed if the imported game changed after this exact source build.
+          test -z "$(git diff --name-only 11ea8dbf5443edb1cd517a9f8396659584dbf98c HEAD -- . ':!.github/workflows/publish-webgl.yml')"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f webgl
+          git commit -m 'Publish browser-smoke-tested XCity WebGL build'
+          git push origin HEAD:main
